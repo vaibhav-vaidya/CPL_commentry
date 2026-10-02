@@ -92,6 +92,10 @@
     input[type="text"], select, .category-row input {
       width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid #39433b; border-radius: 12px; background: #111612; color: var(--text);
     }
+    textarea {
+      width: 100%; min-height: 108px; padding: 12px; resize: vertical;
+      border: 1px solid #39433b; border-radius: 12px; background: #111612; color: var(--text);
+    }
     .form-note { margin: 10px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
     .panel .action-button { width: 100%; margin-top: 14px; }
     .clip-list { display: grid; gap: 10px; }
@@ -104,9 +108,23 @@
     .clip-choice:hover { border-color: #697755; background: #202822; }
     .clip-choice-name { overflow: hidden; font-size: 14px; font-weight: 700; text-overflow: ellipsis; }
     .clip-choice-open { color: var(--lime); font-size: 18px; }
+    .suggestion-history { display: grid; gap: 10px; }
+    .suggestion-item { padding: 14px; border: 1px solid #303a32; border-radius: 15px; background: #141a16; }
+    .suggestion-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .suggestion-meta strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; }
+    .suggestion-meta-actions { display: flex; align-items: center; gap: 8px; }
+    .suggestion-meta time { flex: 0 0 auto; color: var(--muted); font-size: 10px; }
+    .suggestion-delete { width: 30px; height: 30px; flex: 0 0 auto; border: 1px solid #573b36; border-radius: 9px; background: #291b19; color: #ff9a83; cursor: pointer; }
+    .suggestion-delete:hover { background: #432622; }
+    .suggestion-item p { margin: 8px 0 0; color: #d0d6cc; font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; }
+    .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 13px; }
+    .section-heading h3 { margin: 0; }
+    .section-heading .icon-button { flex: 0 0 auto; }
     .clip-card { padding: 13px; border: 1px solid #303a32; border-radius: 15px; background: #141a16; }
     .clip-top { display: flex; align-items: center; gap: 9px; }
     .clip-top .clip-emoji { font-size: 20px; }
+    .clip-delete { width: 37px; height: 37px; flex: 0 0 auto; border: 1px solid #573b36; border-radius: 12px; background: #291b19; color: #ff9a83; cursor: pointer; }
+    .clip-delete:hover { background: #432622; }
     .clip-title { min-width: 0; flex: 1; }
     .clip-title strong { display: block; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
     .clip-title span { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
@@ -159,6 +177,30 @@
       <section class="panel clip-picker" id="clipPicker" hidden aria-live="polite">
         <h3 id="clipPickerTitle">Choose a clip</h3>
         <div class="clip-list" id="categoryClipList"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="suggestionsTitle">
+        <h3 id="suggestionsTitle">💡 Suggestions</h3>
+        <p class="form-note" style="margin:0 0 14px">Share an idea with everyone using the soundboard.</p>
+        <form id="suggestionForm">
+          <div class="field">
+            <label for="suggestionName">Your name</label>
+            <input id="suggestionName" type="text" maxlength="60" placeholder="Name" autocomplete="name" required>
+          </div>
+          <div class="field" style="margin-top:12px">
+            <label for="suggestionText">Your suggestion</label>
+            <textarea id="suggestionText" maxlength="1000" placeholder="Write your suggestion..." required></textarea>
+          </div>
+          <button class="action-button primary" type="submit">Submit suggestion</button>
+          <p class="toast" id="suggestionStatus" role="status" aria-live="polite"></p>
+        </form>
+        <p class="form-note">Suggestions are shared with everyone. Don’t include private information. Firebase Realtime Database rules must allow reading and submitting suggestions.</p>
+        <p class="form-note">Deleting suggestions or categories requires the code. Because this is a public page, the code is visible in its source and is not secure authentication. Use Firebase rules to enforce real permissions.</p>
+        <div class="section-heading" style="margin-top:18px">
+          <h3>Past suggestions <span id="suggestionCount" style="color:var(--muted);font-weight:500"></span></h3>
+          <button class="icon-button" id="refreshSuggestionsButton" type="button" aria-label="Refresh suggestions" title="Refresh suggestions">↻</button>
+        </div>
+        <div class="suggestion-history" id="suggestionHistory" aria-live="polite"></div>
       </section>
 
       <div class="now-playing" aria-live="polite">
@@ -253,10 +295,12 @@
       ];
       const dbName = "marathi-cricket-commentary";
       const defaultFirebaseUrl = "https://device-streaming-bb08fd1e-default-rtdb.firebaseio.com";
+      const suggestionDeleteCode = "1995";
       let db;
       let categories = [];
       let history = {};
       let firebaseClips = [];
+      let suggestions = [];
       let firebaseUrl = "";
       let selectedCategoryId = null;
 
@@ -264,6 +308,7 @@
       const homeStatus = $("#homeStatus");
       const managerStatus = $("#managerStatus");
       const firebaseStatus = $("#firebaseStatus");
+      const suggestionStatus = $("#suggestionStatus");
 
       function setStatus(message, manager = false) {
         (manager ? managerStatus : homeStatus).textContent = message;
@@ -399,6 +444,7 @@
               <span class="clip-emoji" aria-hidden="true">${escapeHtml(category ? category.emoji : "🎵")}</span>
               <div class="clip-title"><strong></strong><span></span></div>
               <button class="icon-button preview" type="button" aria-label="Preview clip" title="Preview">▶</button>
+              <button class="clip-delete" type="button" aria-label="Delete Firebase link" title="Delete link">×</button>
             </div>
             `;
           card.querySelector(".clip-title strong").textContent = clip.name;
@@ -409,6 +455,9 @@
           card.querySelector(".preview").addEventListener("click", () => {
             openYouTubeClip(clip, category);
           });
+          const deleteButton = card.querySelector(".clip-delete");
+          deleteButton.setAttribute("aria-label", `Delete ${clip.name} from Firebase`);
+          deleteButton.addEventListener("click", () => deleteFirebaseLink(clip, deleteButton));
           list.append(card);
         });
       }
@@ -519,6 +568,7 @@
             const youtubeUrl = validateYouTubeUrl(urlValue);
             loaded.push({
               id: `firebase:${key}`,
+              firebaseKey: key,
               name,
               categoryId: category.id,
               youtubeUrl,
@@ -531,6 +581,167 @@
         firebaseClips = loaded;
         render();
         return { loaded: loaded.length, skipped };
+      }
+
+      async function refreshFirebaseSuggestions() {
+        if (!firebaseUrl) {
+          suggestions = [];
+          renderSuggestions();
+          return;
+        }
+        let response;
+        try {
+          response = await fetch(`${firebaseUrl}/suggestions.json`, { cache: "no-store" });
+        } catch (error) {
+          throw new Error(`Could not reach Firebase suggestions. Check the database URL and network connection. ${error.message}`);
+        }
+        if (!response.ok) {
+          const reason = response.status === 401 || response.status === 403
+            ? " Check Realtime Database rules or authentication."
+            : "";
+          throw new Error(`Firebase returned HTTP ${response.status}.${reason}`);
+        }
+        const data = await response.json();
+        const entries = Array.isArray(data)
+          ? data.map((record, index) => [String(index), record])
+          : data && typeof data === "object"
+            ? Object.entries(data)
+            : [];
+        suggestions = entries.filter(([, item]) => item && typeof item === "object")
+          .map(([id, item]) => ({
+            id,
+            name: typeof item.name === "string" ? item.name.trim() : "",
+            text: typeof item.suggestion === "string" ? item.suggestion.trim() : "",
+            createdAt: Number(item.createdAt) || 0
+          }))
+          .filter((item) => item.name && item.text)
+          .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
+        renderSuggestions();
+        return suggestions.length;
+      }
+
+      function renderSuggestions() {
+        const list = $("#suggestionHistory");
+        list.replaceChildren();
+        $("#suggestionCount").textContent = `(${suggestions.length})`;
+        if (!suggestions.length) {
+          list.innerHTML = '<div class="empty"><strong>No suggestions yet</strong>Be the first to share an idea.</div>';
+          return;
+        }
+        suggestions.forEach((suggestion) => {
+          const card = document.createElement("article");
+          card.className = "suggestion-item";
+          const meta = document.createElement("div");
+          meta.className = "suggestion-meta";
+          const name = document.createElement("strong");
+          name.textContent = suggestion.name;
+          meta.append(name);
+          const date = new Date(suggestion.createdAt);
+          if (suggestion.createdAt && !Number.isNaN(date.getTime())) {
+            const time = document.createElement("time");
+            time.dateTime = date.toISOString();
+            time.textContent = new Intl.DateTimeFormat(undefined, {
+              dateStyle: "medium",
+              timeStyle: "short"
+            }).format(date);
+            meta.append(time);
+          }
+          const text = document.createElement("p");
+          text.textContent = suggestion.text;
+          const actions = document.createElement("div");
+          actions.className = "suggestion-meta-actions";
+          if (suggestion.createdAt && !Number.isNaN(date.getTime())) actions.append(meta.querySelector("time"));
+          const deleteButton = document.createElement("button");
+          deleteButton.type = "button";
+          deleteButton.className = "suggestion-delete";
+          deleteButton.textContent = "×";
+          deleteButton.setAttribute("aria-label", `Delete suggestion from ${suggestion.name}`);
+          deleteButton.title = "Delete suggestion";
+          deleteButton.addEventListener("click", () => deleteSuggestion(suggestion, deleteButton));
+          actions.append(deleteButton);
+          meta.append(actions);
+          card.append(meta, text);
+          list.append(card);
+        });
+      }
+
+      async function deleteSuggestion(suggestion, deleteButton) {
+        const enteredCode = window.prompt("Enter the suggestion delete code:");
+        if (enteredCode === null) return;
+        if (enteredCode !== suggestionDeleteCode) {
+          suggestionStatus.textContent = "Incorrect delete code. The suggestion was not deleted.";
+          return;
+        }
+        if (!window.confirm(`Permanently delete ${suggestion.name}'s suggestion from Firebase?`)) return;
+        deleteButton.disabled = true;
+        try {
+          const response = await fetch(`${firebaseUrl}/suggestions/${encodeURIComponent(suggestion.id)}.json`, {
+            method: "DELETE"
+          });
+          if (!response.ok) {
+            const detail = await response.text();
+            const reason = response.status === 401 || response.status === 403
+              ? " Firebase rules must allow deleting this record."
+              : "";
+            throw new Error(`Firebase returned HTTP ${response.status}.${reason}${detail ? ` ${detail}` : ""}`);
+          }
+          suggestions = suggestions.filter((item) => item.id !== suggestion.id);
+          renderSuggestions();
+          suggestionStatus.textContent = "Suggestion permanently deleted from Firebase.";
+          try {
+            await refreshFirebaseSuggestions();
+          } catch (error) {
+            suggestionStatus.textContent = `Suggestion was deleted from Firebase, but history could not refresh: ${error.message}`;
+          }
+        } catch (error) {
+          suggestionStatus.textContent = `Could not delete suggestion: ${error.message}`;
+          deleteButton.disabled = false;
+        }
+      }
+
+      async function submitSuggestion(event) {
+        event.preventDefault();
+        const name = $("#suggestionName").value.trim();
+        const suggestion = $("#suggestionText").value.trim();
+        if (!name || !suggestion) {
+          suggestionStatus.textContent = "Enter your name and a suggestion.";
+          return;
+        }
+        const submitButton = $("#suggestionForm button[type='submit']");
+        submitButton.disabled = true;
+        try {
+          const response = await fetch(`${firebaseUrl}/suggestions.json`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name,
+              suggestion,
+              createdAt: { ".sv": "timestamp" }
+            })
+          });
+          if (!response.ok) {
+            const detail = await response.text();
+            const reason = response.status === 401 || response.status === 403
+              ? " Check Firebase Realtime Database write rules or authentication."
+              : "";
+            throw new Error(`Firebase returned HTTP ${response.status}.${reason}${detail ? ` ${detail}` : ""}`);
+          }
+          const result = await response.json();
+          if (!result || typeof result.name !== "string") {
+            throw new Error("Firebase did not confirm the suggestion was saved.");
+          }
+          $("#suggestionForm").reset();
+          suggestionStatus.textContent = "Suggestion saved and shared with everyone.";
+          try {
+            await refreshFirebaseSuggestions();
+          } catch (error) {
+            suggestionStatus.textContent = `Suggestion was saved, but the shared history could not refresh: ${error.message}`;
+          }
+        } catch (error) {
+          suggestionStatus.textContent = `Could not save suggestion: ${error.message}`;
+        } finally {
+          submitButton.disabled = false;
+        }
       }
 
       async function saveFirebaseSettings(event) {
@@ -547,9 +758,10 @@
           await requestResult(store("settings", "readwrite").put({ key: "firebaseUrl", value }));
           firebaseUrl = value;
           const result = await refreshFirebaseClips();
+          const suggestionCount = await refreshFirebaseSuggestions();
           const message = result.loaded === 0 && result.skipped === 0
-            ? "Connected, but Firebase has no links yet. Add a shared YouTube link below."
-            : `Loaded ${result.loaded} shared link${result.loaded === 1 ? "" : "s"}${result.skipped ? `; skipped ${result.skipped} invalid record${result.skipped === 1 ? "" : "s"}` : ""}.`;
+            ? `Connected. No links yet; ${suggestionCount} past suggestion${suggestionCount === 1 ? "" : "s"} loaded.`
+            : `Loaded ${result.loaded} shared link${result.loaded === 1 ? "" : "s"} and ${suggestionCount} suggestion${suggestionCount === 1 ? "" : "s"}${result.skipped ? `; skipped ${result.skipped} invalid record${result.skipped === 1 ? "" : "s"}` : ""}.`;
           firebaseStatus.textContent = message;
           setStatus(message, true);
         } catch (error) {
@@ -561,6 +773,13 @@
 
       async function addFirebaseLink(event) {
         event.preventDefault();
+        const enteredCode = window.prompt("Enter the code to add a YouTube link:");
+        if (enteredCode === null) return;
+        if (enteredCode !== suggestionDeleteCode) {
+          firebaseStatus.textContent = "Incorrect code. The link was not added.";
+          setStatus("Incorrect code. The link was not added.", true);
+          return;
+        }
         const name = $("#firebaseLinkName").value.trim();
         const category = categories.find((item) => item.id === $("#firebaseLinkCategory").value);
         let youtubeUrl;
@@ -595,6 +814,42 @@
             : `Could not add shared link: ${error.message}`;
           firebaseStatus.textContent = message;
           setStatus(message, true);
+        }
+      }
+
+      async function deleteFirebaseLink(clip, button) {
+        const enteredCode = window.prompt("Enter the code to delete this Firebase link:");
+        if (enteredCode === null) return;
+        if (enteredCode !== suggestionDeleteCode) {
+          firebaseStatus.textContent = "Incorrect code. The link was not deleted.";
+          setStatus("Incorrect code. The link was not deleted.", true);
+          return;
+        }
+        if (!window.confirm(`Permanently delete "${clip.name}" from Firebase?`)) return;
+        button.disabled = true;
+        try {
+          const response = await fetch(`${firebaseUrl}/links/${encodeURIComponent(clip.firebaseKey)}.json`, {
+            method: "DELETE"
+          });
+          if (!response.ok) {
+            const detail = await response.text();
+            const reason = response.status === 401 || response.status === 403
+              ? " Firebase rules must allow deleting links."
+              : "";
+            throw new Error(`Firebase returned HTTP ${response.status}.${reason}${detail ? ` ${detail}` : ""}`);
+          }
+          history = Object.fromEntries(
+            Object.entries(history).map(([categoryId, playedIds]) => [
+              categoryId,
+              playedIds.filter((id) => id !== clip.id)
+            ])
+          );
+          await saveHistory();
+          await refreshFirebaseClips();
+          firebaseStatus.textContent = "YouTube link permanently deleted from Firebase.";
+        } catch (error) {
+          firebaseStatus.textContent = `Could not delete link: ${error.message}`;
+          button.disabled = false;
         }
       }
 
@@ -633,6 +888,12 @@
 
       async function deleteCategory(category) {
         if (categories.length <= 1) return setStatus("Keep at least one category.", true);
+        const enteredCode = window.prompt("Enter the code to delete this category:");
+        if (enteredCode === null) return;
+        if (enteredCode !== suggestionDeleteCode) {
+          setStatus("Incorrect code. The category was not deleted.", true);
+          return;
+        }
         if (!window.confirm(`Delete "${category.name}"? Firebase links assigned to it will stop appearing until you restore the category.`)) return;
         try {
           const tx = db.transaction("categories", "readwrite");
@@ -691,6 +952,16 @@
       $("#categoryForm").addEventListener("submit", addCategory);
       $("#firebaseForm").addEventListener("submit", saveFirebaseSettings);
       $("#firebaseLinkForm").addEventListener("submit", addFirebaseLink);
+      $("#suggestionForm").addEventListener("submit", submitSuggestion);
+      $("#refreshSuggestionsButton").addEventListener("click", async () => {
+        suggestionStatus.textContent = "";
+        try {
+          const count = await refreshFirebaseSuggestions();
+          suggestionStatus.textContent = `Loaded ${count} suggestion${count === 1 ? "" : "s"}.`;
+        } catch (error) {
+          suggestionStatus.textContent = `Could not load suggestions: ${error.message}`;
+        }
+      });
       $("#resetButton").addEventListener("click", resetHistory);
 
       openDatabase().then(async (database) => {
@@ -703,6 +974,11 @@
           } catch (error) {
             setStatus(`Could not load shared links: ${error.message}`);
           }
+        }
+        try {
+          await refreshFirebaseSuggestions();
+        } catch (error) {
+          suggestionStatus.textContent = `Could not load suggestions: ${error.message}`;
         }
       }).catch((error) => {
         setStatus(`Local settings storage is unavailable: ${error.message}`);
