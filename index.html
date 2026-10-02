@@ -54,6 +54,7 @@
     }
     .category-button:hover { border-color: #697755; transform: translateY(-2px); }
     .category-button:active { transform: scale(.98); }
+    .category-button.selected { border-color: var(--lime); background: linear-gradient(145deg, #293421, #1b241a); }
     .category-button:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
     .category-button .emoji { font-size: 27px; }
     .category-button .category-name { font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
@@ -91,20 +92,24 @@
     input[type="text"], select, .category-row input {
       width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid #39433b; border-radius: 12px; background: #111612; color: var(--text);
     }
-    input[type="file"] { width: 100%; color: var(--muted); font-size: 12px; }
-    input[type="file"]::file-selector-button { margin-right: 10px; padding: 10px 12px; border: 1px solid #3c473e; border-radius: 10px; background: var(--panel-2); color: var(--text); cursor: pointer; }
     .form-note { margin: 10px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
     .panel .action-button { width: 100%; margin-top: 14px; }
     .clip-list { display: grid; gap: 10px; }
+    .clip-picker { margin: 16px 0 0; }
+    .clip-picker h3 { margin-bottom: 13px; }
+    .clip-choice {
+      min-height: 54px; width: 100%; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      border: 1px solid var(--line); border-radius: 14px; background: #141a16; color: var(--text); cursor: pointer; text-align: left;
+    }
+    .clip-choice:hover { border-color: #697755; background: #202822; }
+    .clip-choice-name { overflow: hidden; font-size: 14px; font-weight: 700; text-overflow: ellipsis; }
+    .clip-choice-open { color: var(--lime); font-size: 18px; }
     .clip-card { padding: 13px; border: 1px solid #303a32; border-radius: 15px; background: #141a16; }
     .clip-top { display: flex; align-items: center; gap: 9px; }
     .clip-top .clip-emoji { font-size: 20px; }
     .clip-title { min-width: 0; flex: 1; }
     .clip-title strong { display: block; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
     .clip-title span { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
-    .clip-edit { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
-    .clip-edit .action-button { min-height: 39px; margin: 0; font-size: 11px; }
-    .clip-edit .delete { color: #ff9a83; }
     .category-list { display: grid; gap: 8px; }
     .category-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
     .category-row .action-button { width: auto; min-height: 42px; margin: 0; padding: 0 12px; }
@@ -146,26 +151,30 @@
       <div class="intro">
         <p class="eyebrow">Your voice. Your moment.</p>
         <h2>Make every ball<br>sound legendary.</h2>
-        <p>Tap a moment to play a random Marathi reaction. Clips cycle so you won't hear the same one twice in a row.</p>
+        <p>Choose a moment, then select the YouTube reaction you want to open.</p>
       </div>
 
       <div class="category-grid" id="categoryGrid" aria-label="Commentary categories"></div>
 
+      <section class="panel clip-picker" id="clipPicker" hidden aria-live="polite">
+        <h3 id="clipPickerTitle">Choose a clip</h3>
+        <div class="clip-list" id="categoryClipList"></div>
+      </section>
+
       <div class="now-playing" aria-live="polite">
-        <div class="sound-icon" aria-hidden="true">♫</div>
+        <div class="sound-icon" aria-hidden="true">↗</div>
         <div class="now-copy">
           <strong id="playingName">Ready for the next moment</strong>
-          <span id="playingCategory">Add your audio clips to get started</span>
+          <span id="playingCategory">Add shared YouTube links in Manage links</span>
         </div>
-        <button class="icon-button" id="stopButton" type="button" aria-label="Stop audio" title="Stop audio">■</button>
       </div>
 
       <div class="actions">
-        <button class="action-button primary" id="manageButton" type="button">⚙ &nbsp; Manage audio</button>
+        <button class="action-button primary" id="manageButton" type="button">⚙ &nbsp; Manage links</button>
         <button class="action-button" id="resetButton" type="button">↻ &nbsp; Reset history</button>
       </div>
       <p class="toast" id="homeStatus" role="status"></p>
-      <footer>Your audio stays on this device. No account or internet connection needed after the page is saved.</footer>
+      <footer>Shared YouTube links load from Firebase. An internet connection is required to open them.</footer>
     </section>
 
     <section class="manager" id="managerView">
@@ -173,58 +182,45 @@
         <button class="icon-button back" id="backButton" type="button" aria-label="Back to match mode">←</button>
         <div>
           <p class="eyebrow">Your soundboard</p>
-          <h2>Manage audio</h2>
-          <p>Add audio clips or YouTube links, organize categories, and preview your reactions.</p>
+          <h2>Manage links</h2>
+          <p>Add shared YouTube links, organize categories, and open your reactions.</p>
         </div>
       </div>
 
-      <form class="panel" id="addForm">
-        <h3>＋ Add a new clip</h3>
-        <div class="form-grid">
-          <div class="field full">
-            <label for="clipType">Clip type</label>
-            <select id="clipType">
-              <option value="audio">Audio file</option>
-              <option value="youtube">YouTube link</option>
-            </select>
-          </div>
-          <div class="field full">
-            <label for="audioFile">Audio file</label>
-            <input id="audioFile" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav">
-          </div>
-          <div class="field full" id="youtubeField" hidden>
-            <label for="youtubeUrl">YouTube video link</label>
-            <input id="youtubeUrl" type="url" inputmode="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="url">
-          </div>
-          <div class="field">
-            <label for="clipName">Clip name</label>
-            <input id="clipName" type="text" maxlength="80" placeholder="e.g. काय शॉट आहे!" required>
-          </div>
-          <div class="field">
-            <label for="clipCategory">Category</label>
-            <select id="clipCategory" required></select>
-          </div>
-        </div>
-        <p class="form-note" id="addFormNote">MP3 recommended. Audio is stored in this browser on this device; clearing browser data may remove it.</p>
-        <button class="action-button primary" id="saveClipButton" type="submit">Save audio clip</button>
-      </form>
-
       <section class="panel">
-        <h3>Your clips <span id="clipCount" style="color:var(--muted);font-weight:500"></span></h3>
+        <h3>Firebase links <span id="clipCount" style="color:var(--muted);font-weight:500"></span></h3>
         <div class="clip-list" id="clipList"></div>
       </section>
 
       <section class="panel">
         <h3>Shared YouTube links</h3>
-        <p class="form-note" style="margin:0 0 13px">Connect a public Google Sheet. Edit that Sheet from mobile or desktop; its links will load here on refresh.</p>
-        <form id="sheetForm">
+        <p class="form-note" style="margin:0 0 13px">Connect your Firebase Realtime Database to share YouTube links across devices.</p>
+        <form id="firebaseForm">
           <div class="field">
-            <label for="sheetCsvUrl">Google Sheet URL</label>
-            <input id="sheetCsvUrl" type="url" inputmode="url" placeholder="https://docs.google.com/spreadsheets/d/.../edit">
+            <label for="firebaseUrl">Firebase Database URL</label>
+            <input id="firebaseUrl" type="url" inputmode="url" placeholder="https://your-project-default-rtdb.firebaseio.com">
           </div>
-          <p class="form-note">Add rows below the headers <strong>category</strong>, <strong>name</strong>, and <strong>url</strong>. For example: <code>Catch,Great catch,https://youtu.be/VIDEO_ID</code>. The category must match a category above. Share the Sheet so anyone with the link can view it.</p>
-          <button class="action-button primary" type="submit">Save &amp; refresh shared links</button>
-          <p class="toast" id="sheetStatus" role="status" aria-live="polite"></p>
+          <p class="form-note">The app reads links from <code>/links</code> and writes new links there. Firebase Realtime Database rules must allow the access you want; do not enable public writes on a database containing private data.</p>
+          <button class="action-button primary" type="submit">Save &amp; refresh Firebase links</button>
+          <p class="toast" id="firebaseStatus" role="status" aria-live="polite"></p>
+        </form>
+        <form id="firebaseLinkForm" style="margin-top:18px">
+          <h3 style="margin:0 0 12px">＋ Add a shared YouTube link</h3>
+          <div class="form-grid">
+            <div class="field">
+              <label for="firebaseLinkName">Clip name</label>
+              <input id="firebaseLinkName" type="text" maxlength="80" placeholder="e.g. Great catch" required>
+            </div>
+            <div class="field">
+              <label for="firebaseLinkCategory">Category</label>
+              <select id="firebaseLinkCategory" required></select>
+            </div>
+            <div class="field full">
+              <label for="firebaseLinkUrl">YouTube video link</label>
+              <input id="firebaseLinkUrl" type="url" inputmode="url" placeholder="https://youtu.be/..." required>
+            </div>
+          </div>
+          <button class="action-button primary" type="submit">Add link to Firebase</button>
         </form>
       </section>
 
@@ -235,7 +231,7 @@
           <button class="action-button primary" type="submit">＋ Add</button>
         </form>
         <div class="category-list" id="categoryList"></div>
-        <p class="form-note">Deleting a category moves its clips to Other (or the first remaining category).</p>
+        <p class="form-note">If you delete a category, links assigned to it in Firebase will stop appearing until you restore that category or update those links.</p>
       </section>
       <p class="toast" id="managerStatus" role="status"></p>
     </section>
@@ -256,22 +252,18 @@
         { id: "other", name: "Other", emoji: "📣" }
       ];
       const dbName = "marathi-cricket-commentary";
-      const previousDefaultSheetUrl = "https://docs.google.com/spreadsheets/d/1XUHpqJFlh_rmReOGLRAgTJHSO-N1kipwbGStQczTnn8/export?format=csv";
-      const defaultSheetCsvUrl = "https://docs.google.com/spreadsheets/d/1xEcO_-Ny1f2HcNGe5zd7PC3v6dVDHSW5skU0uwSLbqc/export?format=csv";
+      const defaultFirebaseUrl = "https://device-streaming-bb08fd1e-default-rtdb.firebaseio.com";
       let db;
       let categories = [];
-      let clips = [];
-      let activeAudio = null;
-      let activeUrl = null;
       let history = {};
-      let sheetClips = [];
-      let sheetCsvUrl = "";
-      let nextId = 0;
+      let firebaseClips = [];
+      let firebaseUrl = "";
+      let selectedCategoryId = null;
 
       const $ = (selector) => document.querySelector(selector);
       const homeStatus = $("#homeStatus");
       const managerStatus = $("#managerStatus");
-      const sheetStatus = $("#sheetStatus");
+      const firebaseStatus = $("#firebaseStatus");
 
       function setStatus(message, manager = false) {
         (manager ? managerStatus : homeStatus).textContent = message;
@@ -282,12 +274,11 @@
           const request = indexedDB.open(dbName, 1);
           request.onupgradeneeded = () => {
             const database = request.result;
-            database.createObjectStore("clips", { keyPath: "id" });
             database.createObjectStore("categories", { keyPath: "id" });
             database.createObjectStore("settings", { keyPath: "key" });
           };
           request.onsuccess = () => resolve(request.result);
-          request.onerror = () => reject(request.error || new Error("Could not open local audio storage."));
+          request.onerror = () => reject(request.error || new Error("Could not open local app storage."));
         });
       }
 
@@ -303,13 +294,12 @@
       }
 
       async function refreshData() {
-        const tx = db.transaction(["categories", "clips", "settings"], "readonly");
+        const tx = db.transaction(["categories", "settings"], "readonly");
         const categoryRequest = tx.objectStore("categories").getAll();
-        const clipRequest = tx.objectStore("clips").getAll();
         const historyRequest = tx.objectStore("settings").get("history");
-        const sheetUrlRequest = tx.objectStore("settings").get("sheetCsvUrl");
-        const [savedCategories, savedClips, savedHistory, savedSheetUrl] = await Promise.all([
-          requestResult(categoryRequest), requestResult(clipRequest), requestResult(historyRequest), requestResult(sheetUrlRequest)
+        const firebaseUrlRequest = tx.objectStore("settings").get("firebaseUrl");
+        const [savedCategories, savedHistory, savedFirebaseUrl] = await Promise.all([
+          requestResult(categoryRequest), requestResult(historyRequest), requestResult(firebaseUrlRequest)
         ]);
         if (savedCategories.length === 0) {
           const write = db.transaction("categories", "readwrite").objectStore("categories");
@@ -318,12 +308,9 @@
         } else {
           categories = savedCategories;
         }
-        clips = savedClips.map((clip) => ({ ...clip, source: "local" }));
-        sheetCsvUrl = savedSheetUrl && savedSheetUrl.value !== previousDefaultSheetUrl
-          ? savedSheetUrl.value
-          : defaultSheetCsvUrl;
+        firebaseUrl = savedFirebaseUrl ? savedFirebaseUrl.value : defaultFirebaseUrl;
         history = savedHistory ? savedHistory.value : {};
-        $("#sheetCsvUrl").value = sheetCsvUrl;
+        $("#firebaseUrl").value = firebaseUrl;
         render();
       }
 
@@ -331,96 +318,97 @@
         const grid = $("#categoryGrid");
         grid.replaceChildren();
         categories.forEach((category) => {
-          const count = clips.concat(sheetClips).filter((clip) => clip.categoryId === category.id).length;
+          const count = firebaseClips.filter((clip) => clip.categoryId === category.id).length;
           const button = document.createElement("button");
           button.type = "button";
-          button.className = "category-button" + (count ? "" : " no-clips");
-          button.setAttribute("aria-label", `${category.name}, ${count} audio clips`);
+          button.className = `category-button${count ? "" : " no-clips"}${selectedCategoryId === category.id ? " selected" : ""}`;
+          button.setAttribute("aria-label", `${category.name}, ${count} clips`);
+          button.setAttribute("aria-pressed", String(selectedCategoryId === category.id));
           button.innerHTML = `<span class="emoji" aria-hidden="true">${escapeHtml(category.emoji)}</span><span class="category-name"></span><span class="count">${count} ${count === 1 ? "CLIP" : "CLIPS"}</span>`;
           button.querySelector(".category-name").textContent = category.name;
-          button.addEventListener("click", () => playRandom(category.id));
+          button.addEventListener("click", () => selectCategory(category.id));
           grid.append(button);
         });
 
-        const select = $("#clipCategory");
-        const selected = select.value;
-        select.replaceChildren();
+        const sharedSelect = $("#firebaseLinkCategory");
+        const sharedSelected = sharedSelect.value;
+        sharedSelect.replaceChildren();
         categories.forEach((category) => {
           const option = document.createElement("option");
           option.value = category.id;
           option.textContent = `${category.emoji} ${category.name}`;
-          select.append(option);
+          sharedSelect.append(option);
         });
-        if (categories.some((category) => category.id === selected)) select.value = selected;
+        if (categories.some((category) => category.id === sharedSelected)) sharedSelect.value = sharedSelected;
 
         renderClips();
+        renderCategoryClips();
         renderCategories();
+      }
+
+      function selectCategory(categoryId) {
+        selectedCategoryId = categoryId;
+        render();
+        $("#clipPicker").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+
+      function renderCategoryClips() {
+        const picker = $("#clipPicker");
+        const list = $("#categoryClipList");
+        list.replaceChildren();
+        const category = categories.find((item) => item.id === selectedCategoryId);
+        if (!category) {
+          picker.hidden = true;
+          return;
+        }
+        picker.hidden = false;
+        $("#clipPickerTitle").textContent = `${category.emoji} ${category.name} — choose a clip`;
+        const available = firebaseClips.filter((clip) => clip.categoryId === category.id)
+          .sort((a, b) => a.name.localeCompare(b.name));
+        if (!available.length) {
+          list.innerHTML = '<div class="empty"><strong>No clips in this category yet</strong>Add a YouTube link for this category under Manage links.</div>';
+          return;
+        }
+        available.forEach((clip) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "clip-choice";
+          button.innerHTML = '<span class="clip-choice-name"></span><span class="clip-choice-open" aria-hidden="true">↗</span>';
+          button.querySelector(".clip-choice-name").textContent = clip.name;
+          button.setAttribute("aria-label", `Open ${clip.name} on YouTube`);
+          button.addEventListener("click", () => selectClip(clip, category));
+          list.append(button);
+        });
       }
 
       function renderClips() {
         const list = $("#clipList");
         list.replaceChildren();
-        const allClips = clips.concat(sheetClips);
+        const allClips = firebaseClips;
         $("#clipCount").textContent = `(${allClips.length})`;
         if (!allClips.length) {
-          list.innerHTML = `<div class="empty"><strong>${sheetCsvUrl ? "No clips loaded yet" : "No audio clips yet"}</strong>${sheetCsvUrl ? "Add a row with a category, clip name, and YouTube URL to the connected Google Sheet, then refresh shared links." : "Add your first reaction above to start your soundboard."}</div>`;
+          list.innerHTML = '<div class="empty"><strong>No shared links yet</strong>Add a YouTube link below to save it to Firebase.</div>';
           return;
         }
         allClips.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach((clip) => {
           const category = categories.find((item) => item.id === clip.categoryId);
           const card = document.createElement("article");
           card.className = "clip-card";
-          const isShared = clip.source === "sheet";
           card.innerHTML = `
             <div class="clip-top">
               <span class="clip-emoji" aria-hidden="true">${escapeHtml(category ? category.emoji : "🎵")}</span>
               <div class="clip-title"><strong></strong><span></span></div>
               <button class="icon-button preview" type="button" aria-label="Preview clip" title="Preview">▶</button>
             </div>
-            ${isShared ? "" : `<div class="clip-edit">
-              <input type="text" maxlength="80" aria-label="Clip name">
-              <select aria-label="Clip category"></select>
-              <button class="action-button save" type="button">Save changes</button>
-              <button class="action-button delete" type="button">Delete clip</button>
-            </div>`}`;
+            `;
           card.querySelector(".clip-title strong").textContent = clip.name;
-          card.querySelector(".clip-title span").textContent = isShared
-            ? `${category ? category.name : "Uncategorized"} · Shared Google Sheet`
-            : clip.youtubeUrl
-            ? `${category ? category.name : "Uncategorized"} · YouTube link`
-            : `${category ? category.name : "Uncategorized"} · ${formatSize(clip.file.size)}`;
-          if (clip.youtubeUrl) {
-            card.querySelector(".preview").textContent = "↗";
-            card.querySelector(".preview").setAttribute("aria-label", "Open YouTube link");
-            card.querySelector(".preview").title = "Open YouTube link";
-          }
-          if (isShared) {
-            card.querySelector(".preview").addEventListener("click", () => openYouTubeClip(clip, category));
-            list.append(card);
-            return;
-          }
-          const nameInput = card.querySelector("input");
-          nameInput.value = clip.name;
-          const categorySelect = card.querySelector("select");
-          categories.forEach((item) => {
-            const option = document.createElement("option");
-            option.value = item.id;
-            option.textContent = `${item.emoji} ${item.name}`;
-            categorySelect.append(option);
-          });
-          categorySelect.value = clip.categoryId;
+          card.querySelector(".clip-title span").textContent = `${category ? category.name : "Uncategorized"} · YouTube link`;
+          card.querySelector(".preview").textContent = "↗";
+          card.querySelector(".preview").setAttribute("aria-label", "Open YouTube link");
+          card.querySelector(".preview").title = "Open YouTube link";
           card.querySelector(".preview").addEventListener("click", () => {
-            try {
-              playClip(clip, category, true).catch((error) => {
-                setStatus(`Could not play this clip: ${error.message}`, true);
-              });
-              setStatus(clip.youtubeUrl ? "YouTube link opened in a new tab." : "Previewing audio clip.", true);
-            } catch (error) {
-              setStatus(`Could not open this clip: ${error.message}`, true);
-            }
+            openYouTubeClip(clip, category);
           });
-          card.querySelector(".save").addEventListener("click", () => updateClip(clip.id, nameInput.value, categorySelect.value));
-          card.querySelector(".delete").addEventListener("click", () => deleteClip(clip.id));
           list.append(card);
         });
       }
@@ -445,10 +433,6 @@
         })[char]);
       }
 
-      function formatSize(bytes) {
-        return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-      }
-
       function validateYouTubeUrl(value) {
         let url;
         try {
@@ -469,81 +453,63 @@
         return url.href;
       }
 
-      function requestSheetData(value) {
-        let sheetUrl;
+      function validateFirebaseUrl(value) {
+        let url;
         try {
-          sheetUrl = new URL(value);
+          url = new URL(value);
         } catch {
-          throw new Error("Enter a valid Google Sheets URL.");
+          throw new Error("Enter a valid Firebase Realtime Database URL.");
         }
-        const match = sheetUrl.hostname === "docs.google.com"
-          ? sheetUrl.pathname.match(/^\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/)
-          : null;
-        if (!match) throw new Error("Use a Google Sheets link from docs.google.com.");
-
-        const callbackName = `__mccSheetCallback_${Date.now()}_${++nextId}`;
-        const script = document.createElement("script");
-        const endpoint = new URL(`https://docs.google.com/spreadsheets/d/${match[1]}/gviz/tq`);
-        endpoint.searchParams.set("tqx", `out:json;responseHandler:${callbackName}`);
-        const gid = sheetUrl.searchParams.get("gid");
-        if (gid) endpoint.searchParams.set("gid", gid);
-
-        return new Promise((resolve, reject) => {
-          let settled = false;
-          const cleanup = () => {
-            window.clearTimeout(timeout);
-            script.remove();
-            delete window[callbackName];
-          };
-          const finish = (error, data) => {
-            if (settled) return;
-            settled = true;
-            cleanup();
-            if (error) reject(error);
-            else resolve(data);
-          };
-          const timeout = window.setTimeout(() => {
-            finish(new Error("Google Sheets did not respond. Check that the Sheet is shared with viewers and try again."));
-          }, 15000);
-          window[callbackName] = (response) => {
-            if (!response || response.status !== "ok" || !response.table) {
-              const detail = response && response.errors && response.errors[0] && response.errors[0].detailed_message;
-              finish(new Error(detail || "Google Sheets could not read this Sheet. Check its sharing permissions."));
-              return;
-            }
-            finish(null, response.table);
-          };
-          script.onerror = () => finish(new Error("Could not load the Sheet. Check the link and sharing permissions."));
-          script.src = endpoint.href;
-          document.head.append(script);
-        });
+        const hostname = url.hostname.toLowerCase();
+        if (url.protocol !== "https:" || !(hostname.endsWith(".firebaseio.com") || hostname.endsWith(".firebasedatabase.app"))) {
+          throw new Error("Use your HTTPS Firebase Realtime Database URL.");
+        }
+        return url.href.replace(/\/+$/, "").replace(/\.json$/, "");
       }
 
-      async function refreshSheetClips() {
-        if (!sheetCsvUrl) {
-          sheetClips = [];
+      async function refreshFirebaseClips() {
+        if (!firebaseUrl) {
+          firebaseClips = [];
           renderClips();
           return;
         }
-        const table = await requestSheetData(sheetCsvUrl);
-        const rows = table.rows || [];
-        if (!rows.length) throw new Error("The Sheet is empty.");
-        const cellValue = (cell) => cell && cell.v != null ? String(cell.v) : "";
-        const headers = (rows[0].c || []).map((cell) => cellValue(cell).trim().toLowerCase());
-        const categoryIndex = headers.indexOf("category");
-        const nameIndex = headers.indexOf("name");
-        const urlIndex = headers.indexOf("url") >= 0 ? headers.indexOf("url") : headers.indexOf("youtube_url");
-        if (categoryIndex < 0 || nameIndex < 0 || urlIndex < 0) {
-          throw new Error("The Sheet must have columns named category, name, and url.");
+        const endpoint = `${firebaseUrl}/links.json`;
+        let response;
+        try {
+          response = await fetch(endpoint, { cache: "no-store" });
+        } catch (error) {
+          throw new Error(`Could not reach Firebase. Check the database URL and network connection. ${error.message}`);
+        }
+        if (!response.ok) {
+          const reason = response.status === 401 || response.status === 403
+            ? " Check Realtime Database rules or authentication."
+            : "";
+          throw new Error(`Firebase returned HTTP ${response.status}.${reason}`);
+        }
+        const data = await response.json();
+        const records = [];
+        if (data && typeof data === "object") {
+          if (Array.isArray(data)) {
+            data.forEach((record, index) => records.push([String(index), record]));
+          } else if (data.category || data.name || data.url || data.youtube_url) {
+            records.push(["single", data]);
+          } else if (data.links && typeof data.links === "object") {
+            Object.entries(data.links).forEach((entry) => records.push(entry));
+          } else {
+            Object.entries(data).forEach((entry) => records.push(entry));
+          }
         }
 
         let skipped = 0;
         const loaded = [];
-        rows.slice(1).forEach((row) => {
-          const values = row.c || [];
-          const categoryName = cellValue(values[categoryIndex]).trim();
-          const name = cellValue(values[nameIndex]).trim();
-          const urlValue = cellValue(values[urlIndex]).trim();
+        records.forEach(([key, record]) => {
+          if (!record || typeof record !== "object") {
+            skipped++;
+            return;
+          }
+          const categoryName = String(record.category || "").trim();
+          const name = String(record.name || "").trim();
+          const urlValue = String(record.url || record.youtube_url || "").trim();
           const category = categories.find((item) => item.name.toLocaleLowerCase() === categoryName.toLocaleLowerCase());
           if (!category || !name || !urlValue) {
             skipped++;
@@ -551,147 +517,84 @@
           }
           try {
             const youtubeUrl = validateYouTubeUrl(urlValue);
-            const videoId = new URL(youtubeUrl).hostname.endsWith("youtu.be")
-              ? new URL(youtubeUrl).pathname.slice(1)
-              : new URL(youtubeUrl).searchParams.get("v") || new URL(youtubeUrl).pathname.split("/").pop();
             loaded.push({
-              id: `sheet:${encodeURIComponent(category.id)}:${encodeURIComponent(videoId)}:${encodeURIComponent(name.toLocaleLowerCase())}`,
+              id: `firebase:${key}`,
               name,
               categoryId: category.id,
               youtubeUrl,
-              source: "sheet"
+              source: "firebase"
             });
           } catch {
             skipped++;
           }
         });
-        sheetClips = loaded;
+        firebaseClips = loaded;
         render();
         return { loaded: loaded.length, skipped };
       }
 
-      async function saveAndRefreshSheet(event) {
+      async function saveFirebaseSettings(event) {
         event.preventDefault();
-        const value = $("#sheetCsvUrl").value.trim();
-        if (value) {
-          try {
-            const url = new URL(value);
-            if (url.protocol !== "https:") throw new Error("Use an HTTPS Google Sheets URL.");
-            if (url.hostname !== "docs.google.com" || !/^\/spreadsheets\/d\/[a-zA-Z0-9_-]+/.test(url.pathname)) {
-              throw new Error("Use a Google Sheets link from docs.google.com.");
-            }
-          } catch (error) {
-            const message = error.message || "Enter a valid Google Sheets URL.";
-            sheetStatus.textContent = message;
-            setStatus(message, true);
-            return;
-          }
+        let value;
+        try {
+          value = validateFirebaseUrl($("#firebaseUrl").value.trim());
+        } catch (error) {
+          firebaseStatus.textContent = error.message;
+          setStatus(error.message, true);
+          return;
         }
         try {
-          await requestResult(store("settings", "readwrite").put({ key: "sheetCsvUrl", value }));
-          sheetCsvUrl = value;
-          const result = await refreshSheetClips();
-          const message = !value
-            ? "Shared Sheet disconnected."
-            : result.loaded === 0 && result.skipped === 0
-              ? "Connected, but the Sheet has no links yet. Add a data row below the column headers, then refresh."
-              : `Loaded ${result.loaded} shared link${result.loaded === 1 ? "" : "s"}${result.skipped ? `; skipped ${result.skipped} invalid row${result.skipped === 1 ? "" : "s"}` : ""}.`;
-          sheetStatus.textContent = message;
+          await requestResult(store("settings", "readwrite").put({ key: "firebaseUrl", value }));
+          firebaseUrl = value;
+          const result = await refreshFirebaseClips();
+          const message = result.loaded === 0 && result.skipped === 0
+            ? "Connected, but Firebase has no links yet. Add a shared YouTube link below."
+            : `Loaded ${result.loaded} shared link${result.loaded === 1 ? "" : "s"}${result.skipped ? `; skipped ${result.skipped} invalid record${result.skipped === 1 ? "" : "s"}` : ""}.`;
+          firebaseStatus.textContent = message;
           setStatus(message, true);
         } catch (error) {
           const message = `Could not load shared links: ${error.message}`;
-          sheetStatus.textContent = message;
+          firebaseStatus.textContent = message;
           setStatus(message, true);
         }
       }
 
-      function openYouTubeClip(clip, category) {
-        stopAudio();
-        $("#playingName").textContent = clip.name;
-        $("#playingCategory").textContent = `${category ? category.name : "YouTube"} · Shared link · Opens in new tab`;
-        window.open(clip.youtubeUrl, "_blank", "noopener,noreferrer");
-      }
-
-      function updateClipType() {
-        const youtube = $("#clipType").value === "youtube";
-        $("#audioFile").required = !youtube;
-        $("#audioFile").disabled = youtube;
-        $("#youtubeField").hidden = !youtube;
-        $("#youtubeUrl").required = youtube;
-        $("#youtubeUrl").disabled = !youtube;
-        $("#audioFile").parentElement.hidden = youtube;
-        $("#saveClipButton").textContent = youtube ? "Save YouTube link" : "Save audio clip";
-        $("#addFormNote").textContent = youtube
-          ? "When this clip is picked, its YouTube video opens in a new tab. The soundboard stays open."
-          : "MP3 recommended. Audio is stored in this browser on this device; clearing browser data may remove it.";
-      }
-
-      function createId() {
-        return `clip-${Date.now()}-${++nextId}`;
-      }
-
-      async function addClip(event) {
+      async function addFirebaseLink(event) {
         event.preventDefault();
-        const type = $("#clipType").value;
-        const file = $("#audioFile").files[0];
-        const youtubeInput = $("#youtubeUrl").value.trim();
-        const name = $("#clipName").value.trim();
-        const categoryId = $("#clipCategory").value;
-        if (!name || !categoryId) return setStatus("Enter a clip name and choose a category.", true);
-        if (type === "audio" && !file) return setStatus("Choose an audio file.", true);
-        if (type === "audio" && !file.type.startsWith("audio/") && !/\.(mp3|m4a|aac|wav|ogg)$/i.test(file.name)) {
-          return setStatus("That file does not appear to be a supported audio format.", true);
-        }
+        const name = $("#firebaseLinkName").value.trim();
+        const category = categories.find((item) => item.id === $("#firebaseLinkCategory").value);
         let youtubeUrl;
-        if (type === "youtube") {
-          try {
-            youtubeUrl = validateYouTubeUrl(youtubeInput);
-          } catch (error) {
-            return setStatus(error.message, true);
-          }
-        }
         try {
-          const clip = { id: createId(), name, categoryId, addedAt: Date.now() };
-          if (type === "youtube") clip.youtubeUrl = youtubeUrl;
-          else clip.file = file;
-          await requestResult(store("clips", "readwrite").add(clip));
-          $("#addForm").reset();
-          updateClipType();
-          await refreshData();
-          setStatus(type === "youtube" ? "YouTube link saved on this device." : "Audio clip saved on this device.", true);
+          if (!firebaseUrl) throw new Error("Save a Firebase Database URL first.");
+          if (!name || !category) throw new Error("Enter a clip name and choose a category.");
+          youtubeUrl = validateYouTubeUrl($("#firebaseLinkUrl").value.trim());
         } catch (error) {
-          setStatus(`Could not save this clip: ${error.message}`, true);
-        }
-      }
-
-      async function updateClip(id, name, categoryId) {
-        const cleanName = name.trim();
-        if (!cleanName || !categories.some((category) => category.id === categoryId)) {
-          return setStatus("Enter a clip name and choose a valid category.", true);
+          firebaseStatus.textContent = error.message;
+          setStatus(error.message, true);
+          return;
         }
         try {
-          const clip = clips.find((item) => item.id === id);
-          if (!clip) throw new Error("This clip is no longer available.");
-          await requestResult(store("clips", "readwrite").put({ ...clip, name: cleanName, categoryId }));
-          await refreshData();
-          setStatus("Clip changes saved.", true);
-        } catch (error) {
-          setStatus(`Could not update this clip: ${error.message}`, true);
-        }
-      }
-
-      async function deleteClip(id) {
-        if (!window.confirm("Delete this audio clip from this device?")) return;
-        try {
-          await requestResult(store("clips", "readwrite").delete(id));
-          Object.keys(history).forEach((categoryId) => {
-            history[categoryId] = (history[categoryId] || []).filter((clipId) => clipId !== id);
+          const response = await fetch(`${firebaseUrl}/links.json`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ category: category.name, name, url: youtubeUrl })
           });
-          await saveHistory();
-          await refreshData();
-          setStatus("Clip deleted.", true);
+          if (!response.ok) {
+            const detail = await response.text();
+            throw new Error(`Firebase returned HTTP ${response.status}${detail ? `: ${detail}` : ""}.`);
+          }
+          const result = await response.json();
+          if (!result || !result.name) throw new Error("Firebase did not confirm the new link.");
+          await refreshFirebaseClips();
+          $("#firebaseLinkForm").reset();
+          firebaseStatus.textContent = "Shared YouTube link added to Firebase.";
+          setStatus("Shared YouTube link added to Firebase.", true);
         } catch (error) {
-          setStatus(`Could not delete this clip: ${error.message}`, true);
+          const message = error.message.includes("HTTP 401") || error.message.includes("HTTP 403")
+            ? `Firebase denied the write. Check Realtime Database rules or authentication. ${error.message}`
+            : `Could not add shared link: ${error.message}`;
+          firebaseStatus.textContent = message;
+          setStatus(message, true);
         }
       }
 
@@ -717,12 +620,11 @@
         event.preventDefault();
         const name = $("#newCategoryName").value.trim();
         if (!name) return;
-        const id = `category-${Date.now()}-${++nextId}`;
+        const id = `category-${Date.now()}-${crypto.randomUUID()}`;
         try {
           await requestResult(store("categories", "readwrite").add({ id, name, emoji: "🎙️" }));
           $("#categoryForm").reset();
           await refreshData();
-          $("#clipCategory").value = id;
           setStatus("Category added.", true);
         } catch (error) {
           setStatus(`Could not add category: ${error.message}`, true);
@@ -731,15 +633,10 @@
 
       async function deleteCategory(category) {
         if (categories.length <= 1) return setStatus("Keep at least one category.", true);
-        if (!window.confirm(`Delete "${category.name}"? Its clips will move to another category.`)) return;
-        const remaining = categories.filter((item) => item.id !== category.id);
-        const destination = remaining.find((item) => item.id === "other") || remaining[0];
+        if (!window.confirm(`Delete "${category.name}"? Firebase links assigned to it will stop appearing until you restore the category.`)) return;
         try {
-          const tx = db.transaction(["categories", "clips"], "readwrite");
+          const tx = db.transaction("categories", "readwrite");
           tx.objectStore("categories").delete(category.id);
-          clips.filter((clip) => clip.categoryId === category.id).forEach((clip) => {
-            tx.objectStore("clips").put({ ...clip, categoryId: destination.id });
-          });
           await new Promise((resolve, reject) => {
             tx.oncomplete = resolve;
             tx.onerror = () => reject(tx.error || new Error("Could not update categories."));
@@ -748,7 +645,7 @@
           delete history[category.id];
           await saveHistory();
           await refreshData();
-          setStatus(`Category deleted. Clips moved to ${destination.name}.`, true);
+          setStatus("Category deleted.", true);
         } catch (error) {
           setStatus(`Could not delete category: ${error.message}`, true);
         }
@@ -758,69 +655,28 @@
         await requestResult(store("settings", "readwrite").put({ key: "history", value: history }));
       }
 
-      async function playRandom(categoryId) {
-        const available = clips.concat(sheetClips).filter((clip) => clip.categoryId === categoryId);
-        const category = categories.find((item) => item.id === categoryId);
-        if (!available.length) {
-          setStatus(`No clips in ${category ? category.name : "this category"} yet. Add one in Manage audio.`);
-          return;
-        }
-        const alreadyPlayed = new Set(history[categoryId] || []);
-        let candidates = available.filter((clip) => !alreadyPlayed.has(clip.id));
-        if (!candidates.length) {
-          history[categoryId] = [];
-          candidates = available;
-        }
-        const selected = candidates[Math.floor(Math.random() * candidates.length)];
+      async function selectClip(clip, category) {
         try {
-          await playClip(selected, category, false);
-          const current = new Set(history[categoryId] || []);
-          current.add(selected.id);
-          history[categoryId] = Array.from(current);
+          openYouTubeClip(clip, category);
+          const current = new Set(history[category.id] || []);
+          current.add(clip.id);
+          history[category.id] = Array.from(current);
           await saveHistory();
-          setStatus("");
         } catch (error) {
-          setStatus(`Could not play audio: ${error.message}`);
+          setStatus(`Could not save play history: ${error.message}`);
         }
       }
 
-      function playClip(clip, category, preview) {
-        stopAudio();
+      function openYouTubeClip(clip, category) {
         $("#playingName").textContent = clip.name;
-        if (clip.youtubeUrl) {
-          $("#playingCategory").textContent = `${category ? category.name : "YouTube"} · YouTube${preview ? " preview" : ""} · Opens in new tab`;
-          window.open(clip.youtubeUrl, "_blank", "noopener,noreferrer");
-          return Promise.resolve();
-        }
-        if (!clip.file) throw new Error("This clip has no audio file or YouTube link.");
-        $("#playingCategory").textContent = `${category ? category.name : "Audio"}${preview ? " · Preview" : ""}`;
-        activeUrl = URL.createObjectURL(clip.file);
-        activeAudio = new Audio(activeUrl);
-        try {
-          const playback = activeAudio.play();
-          activeAudio.addEventListener("ended", stopAudio, { once: true });
-          return playback;
-        } catch (error) {
-          stopAudio();
-          throw error;
-        }
-      }
-
-      function stopAudio() {
-        if (activeAudio) {
-          activeAudio.pause();
-          activeAudio.src = "";
-          activeAudio = null;
-        }
-        if (activeUrl) {
-          URL.revokeObjectURL(activeUrl);
-          activeUrl = null;
-        }
+        $("#playingCategory").textContent = `${category ? category.name : "YouTube"} · Opens in new tab`;
+        window.open(clip.youtubeUrl, "_blank", "noopener,noreferrer");
+        setStatus(`${clip.name} opened. It remains in the category list.`);
       }
 
       function resetHistory() {
         history = {};
-        saveHistory().then(() => setStatus("Play history cleared. Fresh random cycles start now."))
+        saveHistory().then(() => setStatus("Play history cleared. Your clips remain available to select."))
           .catch((error) => setStatus(`Could not reset history: ${error.message}`));
       }
 
@@ -832,27 +688,24 @@
 
       $("#manageButton").addEventListener("click", () => showManager(true));
       $("#backButton").addEventListener("click", () => showManager(false));
-      $("#addForm").addEventListener("submit", addClip);
-      $("#clipType").addEventListener("change", updateClipType);
       $("#categoryForm").addEventListener("submit", addCategory);
-      $("#sheetForm").addEventListener("submit", saveAndRefreshSheet);
+      $("#firebaseForm").addEventListener("submit", saveFirebaseSettings);
+      $("#firebaseLinkForm").addEventListener("submit", addFirebaseLink);
       $("#resetButton").addEventListener("click", resetHistory);
-      $("#stopButton").addEventListener("click", stopAudio);
 
       openDatabase().then(async (database) => {
         db = database;
-        updateClipType();
         await refreshData();
-        if (sheetCsvUrl) {
+        if (firebaseUrl) {
           try {
-            const result = await refreshSheetClips();
-            if (result.skipped) setStatus(`Loaded ${result.loaded} shared links; skipped ${result.skipped} invalid Sheet row${result.skipped === 1 ? "" : "s"}.`);
+            const result = await refreshFirebaseClips();
+            if (result.skipped) setStatus(`Loaded ${result.loaded} shared links; skipped ${result.skipped} invalid Firebase record${result.skipped === 1 ? "" : "s"}.`);
           } catch (error) {
             setStatus(`Could not load shared links: ${error.message}`);
           }
         }
       }).catch((error) => {
-        setStatus(`Local audio storage is unavailable: ${error.message}`);
+        setStatus(`Local settings storage is unavailable: ${error.message}`);
         $("#manageButton").disabled = true;
       });
     })();
