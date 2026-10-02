@@ -215,6 +215,19 @@
       </section>
 
       <section class="panel">
+        <h3>Shared YouTube links</h3>
+        <p class="form-note" style="margin:0 0 13px">Connect a Google Sheet published as CSV. Edit that Sheet from mobile or desktop; its links will load here on refresh.</p>
+        <form id="sheetForm">
+          <div class="field">
+            <label for="sheetCsvUrl">Published CSV URL</label>
+            <input id="sheetCsvUrl" type="url" inputmode="url" placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv">
+          </div>
+          <p class="form-note">Use CSV columns named <strong>category</strong>, <strong>name</strong>, and <strong>url</strong>. Category must match a category above. Publish the sheet to the web so it can be read without signing in.</p>
+          <button class="action-button primary" type="submit">Save &amp; refresh shared links</button>
+        </form>
+      </section>
+
+      <section class="panel">
         <h3>Categories</h3>
         <form id="categoryForm" class="category-row" style="margin-bottom:12px">
           <input id="newCategoryName" type="text" maxlength="32" placeholder="New category name" aria-label="New category name" required>
@@ -248,6 +261,8 @@
       let activeAudio = null;
       let activeUrl = null;
       let history = {};
+      let sheetClips = [];
+      let sheetCsvUrl = "";
       let nextId = 0;
 
       const $ = (selector) => document.querySelector(selector);
@@ -288,8 +303,9 @@
         const categoryRequest = tx.objectStore("categories").getAll();
         const clipRequest = tx.objectStore("clips").getAll();
         const historyRequest = tx.objectStore("settings").get("history");
-        const [savedCategories, savedClips, savedHistory] = await Promise.all([
-          requestResult(categoryRequest), requestResult(clipRequest), requestResult(historyRequest)
+        const sheetUrlRequest = tx.objectStore("settings").get("sheetCsvUrl");
+        const [savedCategories, savedClips, savedHistory, savedSheetUrl] = await Promise.all([
+          requestResult(categoryRequest), requestResult(clipRequest), requestResult(historyRequest), requestResult(sheetUrlRequest)
         ]);
         if (savedCategories.length === 0) {
           const write = db.transaction("categories", "readwrite").objectStore("categories");
@@ -298,8 +314,10 @@
         } else {
           categories = savedCategories;
         }
-        clips = savedClips;
+        clips = savedClips.map((clip) => ({ ...clip, source: "local" }));
+        sheetCsvUrl = savedSheetUrl ? savedSheetUrl.value : "";
         history = savedHistory ? savedHistory.value : {};
+        $("#sheetCsvUrl").value = sheetCsvUrl;
         render();
       }
 
@@ -307,7 +325,7 @@
         const grid = $("#categoryGrid");
         grid.replaceChildren();
         categories.forEach((category) => {
-          const count = clips.filter((clip) => clip.categoryId === category.id).length;
+          const count = clips.concat(sheetClips).filter((clip) => clip.categoryId === category.id).length;
           const button = document.createElement("button");
           button.type = "button";
           button.className = "category-button" + (count ? "" : " no-clips");
@@ -336,35 +354,44 @@
       function renderClips() {
         const list = $("#clipList");
         list.replaceChildren();
-        $("#clipCount").textContent = `(${clips.length})`;
-        if (!clips.length) {
+        const allClips = clips.concat(sheetClips);
+        $("#clipCount").textContent = `(${allClips.length})`;
+        if (!allClips.length) {
           list.innerHTML = '<div class="empty"><strong>No audio clips yet</strong>Add your first reaction above to start your soundboard.</div>';
           return;
         }
-        clips.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach((clip) => {
+        allClips.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach((clip) => {
           const category = categories.find((item) => item.id === clip.categoryId);
           const card = document.createElement("article");
           card.className = "clip-card";
+          const isShared = clip.source === "sheet";
           card.innerHTML = `
             <div class="clip-top">
               <span class="clip-emoji" aria-hidden="true">${escapeHtml(category ? category.emoji : "🎵")}</span>
               <div class="clip-title"><strong></strong><span></span></div>
               <button class="icon-button preview" type="button" aria-label="Preview clip" title="Preview">▶</button>
             </div>
-            <div class="clip-edit">
+            ${isShared ? "" : `<div class="clip-edit">
               <input type="text" maxlength="80" aria-label="Clip name">
               <select aria-label="Clip category"></select>
               <button class="action-button save" type="button">Save changes</button>
               <button class="action-button delete" type="button">Delete clip</button>
-            </div>`;
+            </div>`}`;
           card.querySelector(".clip-title strong").textContent = clip.name;
-          card.querySelector(".clip-title span").textContent = clip.youtubeUrl
+          card.querySelector(".clip-title span").textContent = isShared
+            ? `${category ? category.name : "Uncategorized"} · Shared Google Sheet`
+            : clip.youtubeUrl
             ? `${category ? category.name : "Uncategorized"} · YouTube link`
             : `${category ? category.name : "Uncategorized"} · ${formatSize(clip.file.size)}`;
           if (clip.youtubeUrl) {
             card.querySelector(".preview").textContent = "↗";
             card.querySelector(".preview").setAttribute("aria-label", "Open YouTube link");
             card.querySelector(".preview").title = "Open YouTube link";
+          }
+          if (isShared) {
+            card.querySelector(".preview").addEventListener("click", () => openYouTubeClip(clip, category));
+            list.append(card);
+            return;
           }
           const nameInput = card.querySelector("input");
           nameInput.value = clip.name;
@@ -434,6 +461,129 @@
           throw new Error("Use a valid YouTube video URL, such as youtube.com/watch?v=... or youtu.be/...");
         }
         return url.href;
+      }
+
+      function parseCsv(text) {
+        const rows = [];
+        let row = [];
+        let cell = "";
+        let quoted = false;
+        for (let i = 0; i < text.length; i++) {
+          const char = text[i];
+          if (quoted) {
+            if (char === '"' && text[i + 1] === '"') {
+              cell += '"';
+              i++;
+            } else if (char === '"') {
+              quoted = false;
+            } else {
+              cell += char;
+            }
+          } else if (char === '"' && cell.length === 0) {
+            quoted = true;
+          } else if (char === ",") {
+            row.push(cell);
+            cell = "";
+          } else if (char === "\n" || char === "\r") {
+            if (char === "\r" && text[i + 1] === "\n") i++;
+            row.push(cell);
+            if (row.some((value) => value.trim())) rows.push(row);
+            row = [];
+            cell = "";
+          } else {
+            cell += char;
+          }
+        }
+        if (quoted) throw new Error("The shared CSV has an unfinished quoted field.");
+        row.push(cell);
+        if (row.some((value) => value.trim())) rows.push(row);
+        return rows;
+      }
+
+      async function refreshSheetClips() {
+        if (!sheetCsvUrl) {
+          sheetClips = [];
+          renderClips();
+          return;
+        }
+        let response;
+        try {
+          response = await fetch(sheetCsvUrl, { cache: "no-store" });
+        } catch (error) {
+          throw new Error(`Could not reach the published CSV. Check that the Sheet is published and its link is public. ${error.message}`);
+        }
+        if (!response.ok) throw new Error(`The published CSV returned HTTP ${response.status}.`);
+        const rows = parseCsv((await response.text()).replace(/^\uFEFF/, ""));
+        if (!rows.length) throw new Error("The published CSV is empty.");
+        const headers = rows[0].map((value) => value.trim().toLowerCase());
+        const categoryIndex = headers.indexOf("category");
+        const nameIndex = headers.indexOf("name");
+        const urlIndex = headers.indexOf("url") >= 0 ? headers.indexOf("url") : headers.indexOf("youtube_url");
+        if (categoryIndex < 0 || nameIndex < 0 || urlIndex < 0) {
+          throw new Error("CSV must include category, name, and url columns.");
+        }
+
+        let skipped = 0;
+        const loaded = [];
+        rows.slice(1).forEach((values) => {
+          const categoryName = (values[categoryIndex] || "").trim();
+          const name = (values[nameIndex] || "").trim();
+          const urlValue = (values[urlIndex] || "").trim();
+          const category = categories.find((item) => item.name.toLocaleLowerCase() === categoryName.toLocaleLowerCase());
+          if (!category || !name || !urlValue) {
+            skipped++;
+            return;
+          }
+          try {
+            const youtubeUrl = validateYouTubeUrl(urlValue);
+            const videoId = new URL(youtubeUrl).hostname.endsWith("youtu.be")
+              ? new URL(youtubeUrl).pathname.slice(1)
+              : new URL(youtubeUrl).searchParams.get("v") || new URL(youtubeUrl).pathname.split("/").pop();
+            loaded.push({
+              id: `sheet:${encodeURIComponent(category.id)}:${encodeURIComponent(videoId)}:${encodeURIComponent(name.toLocaleLowerCase())}`,
+              name,
+              categoryId: category.id,
+              youtubeUrl,
+              source: "sheet"
+            });
+          } catch {
+            skipped++;
+          }
+        });
+        sheetClips = loaded;
+        render();
+        return { loaded: loaded.length, skipped };
+      }
+
+      async function saveAndRefreshSheet(event) {
+        event.preventDefault();
+        const value = $("#sheetCsvUrl").value.trim();
+        if (value) {
+          try {
+            const url = new URL(value);
+            if (url.protocol !== "https:") throw new Error("Use an HTTPS published CSV URL.");
+          } catch (error) {
+            setStatus(error.message || "Enter a valid published CSV URL.", true);
+            return;
+          }
+        }
+        try {
+          await requestResult(store("settings", "readwrite").put({ key: "sheetCsvUrl", value }));
+          sheetCsvUrl = value;
+          const result = await refreshSheetClips();
+          setStatus(value
+            ? `Loaded ${result.loaded} shared link${result.loaded === 1 ? "" : "s"}${result.skipped ? `; skipped ${result.skipped} invalid row${result.skipped === 1 ? "" : "s"}` : ""}.`
+            : "Shared Sheet disconnected.", true);
+        } catch (error) {
+          setStatus(`Could not load shared links: ${error.message}`, true);
+        }
+      }
+
+      function openYouTubeClip(clip, category) {
+        stopAudio();
+        $("#playingName").textContent = clip.name;
+        $("#playingCategory").textContent = `${category ? category.name : "YouTube"} · Shared link · Opens in new tab`;
+        window.open(clip.youtubeUrl, "_blank", "noopener,noreferrer");
       }
 
       function updateClipType() {
@@ -583,7 +733,7 @@
       }
 
       async function playRandom(categoryId) {
-        const available = clips.filter((clip) => clip.categoryId === categoryId);
+        const available = clips.concat(sheetClips).filter((clip) => clip.categoryId === categoryId);
         const category = categories.find((item) => item.id === categoryId);
         if (!available.length) {
           setStatus(`No clips in ${category ? category.name : "this category"} yet. Add one in Manage audio.`);
@@ -659,6 +809,7 @@
       $("#addForm").addEventListener("submit", addClip);
       $("#clipType").addEventListener("change", updateClipType);
       $("#categoryForm").addEventListener("submit", addCategory);
+      $("#sheetForm").addEventListener("submit", saveAndRefreshSheet);
       $("#resetButton").addEventListener("click", resetHistory);
       $("#stopButton").addEventListener("click", stopAudio);
 
@@ -666,6 +817,14 @@
         db = database;
         updateClipType();
         await refreshData();
+        if (sheetCsvUrl) {
+          try {
+            const result = await refreshSheetClips();
+            if (result.skipped) setStatus(`Loaded ${result.loaded} shared links; skipped ${result.skipped} invalid CSV row${result.skipped === 1 ? "" : "s"}.`);
+          } catch (error) {
+            setStatus(`Could not load shared links: ${error.message}`);
+          }
+        }
       }).catch((error) => {
         setStatus(`Local audio storage is unavailable: ${error.message}`);
         $("#manageButton").disabled = true;
