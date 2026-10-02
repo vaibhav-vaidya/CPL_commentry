@@ -216,14 +216,15 @@
 
       <section class="panel">
         <h3>Shared YouTube links</h3>
-        <p class="form-note" style="margin:0 0 13px">Connect a Google Sheet published as CSV. Edit that Sheet from mobile or desktop; its links will load here on refresh.</p>
+        <p class="form-note" style="margin:0 0 13px">Connect a public Google Sheet. Edit that Sheet from mobile or desktop; its links will load here on refresh.</p>
         <form id="sheetForm">
           <div class="field">
-            <label for="sheetCsvUrl">Published CSV URL</label>
-            <input id="sheetCsvUrl" type="url" inputmode="url" placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv">
+            <label for="sheetCsvUrl">Google Sheet URL</label>
+            <input id="sheetCsvUrl" type="url" inputmode="url" placeholder="https://docs.google.com/spreadsheets/d/.../edit">
           </div>
-          <p class="form-note">Use CSV columns named <strong>category</strong>, <strong>name</strong>, and <strong>url</strong>. Category must match a category above. Publish the sheet to the web so it can be read without signing in.</p>
+          <p class="form-note">Add rows below the headers <strong>category</strong>, <strong>name</strong>, and <strong>url</strong>. For example: <code>Catch,Great catch,https://youtu.be/VIDEO_ID</code>. The category must match a category above. Share the Sheet so anyone with the link can view it.</p>
           <button class="action-button primary" type="submit">Save &amp; refresh shared links</button>
+          <p class="toast" id="sheetStatus" role="status" aria-live="polite"></p>
         </form>
       </section>
 
@@ -255,6 +256,8 @@
         { id: "other", name: "Other", emoji: "📣" }
       ];
       const dbName = "marathi-cricket-commentary";
+      const previousDefaultSheetUrl = "https://docs.google.com/spreadsheets/d/1XUHpqJFlh_rmReOGLRAgTJHSO-N1kipwbGStQczTnn8/export?format=csv";
+      const defaultSheetCsvUrl = "https://docs.google.com/spreadsheets/d/1xEcO_-Ny1f2HcNGe5zd7PC3v6dVDHSW5skU0uwSLbqc/export?format=csv";
       let db;
       let categories = [];
       let clips = [];
@@ -268,6 +271,7 @@
       const $ = (selector) => document.querySelector(selector);
       const homeStatus = $("#homeStatus");
       const managerStatus = $("#managerStatus");
+      const sheetStatus = $("#sheetStatus");
 
       function setStatus(message, manager = false) {
         (manager ? managerStatus : homeStatus).textContent = message;
@@ -315,7 +319,9 @@
           categories = savedCategories;
         }
         clips = savedClips.map((clip) => ({ ...clip, source: "local" }));
-        sheetCsvUrl = savedSheetUrl ? savedSheetUrl.value : "";
+        sheetCsvUrl = savedSheetUrl && savedSheetUrl.value !== previousDefaultSheetUrl
+          ? savedSheetUrl.value
+          : defaultSheetCsvUrl;
         history = savedHistory ? savedHistory.value : {};
         $("#sheetCsvUrl").value = sheetCsvUrl;
         render();
@@ -357,7 +363,7 @@
         const allClips = clips.concat(sheetClips);
         $("#clipCount").textContent = `(${allClips.length})`;
         if (!allClips.length) {
-          list.innerHTML = '<div class="empty"><strong>No audio clips yet</strong>Add your first reaction above to start your soundboard.</div>';
+          list.innerHTML = `<div class="empty"><strong>${sheetCsvUrl ? "No clips loaded yet" : "No audio clips yet"}</strong>${sheetCsvUrl ? "Add a row with a category, clip name, and YouTube URL to the connected Google Sheet, then refresh shared links." : "Add your first reaction above to start your soundboard."}</div>`;
           return;
         }
         allClips.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach((clip) => {
@@ -463,41 +469,54 @@
         return url.href;
       }
 
-      function parseCsv(text) {
-        const rows = [];
-        let row = [];
-        let cell = "";
-        let quoted = false;
-        for (let i = 0; i < text.length; i++) {
-          const char = text[i];
-          if (quoted) {
-            if (char === '"' && text[i + 1] === '"') {
-              cell += '"';
-              i++;
-            } else if (char === '"') {
-              quoted = false;
-            } else {
-              cell += char;
-            }
-          } else if (char === '"' && cell.length === 0) {
-            quoted = true;
-          } else if (char === ",") {
-            row.push(cell);
-            cell = "";
-          } else if (char === "\n" || char === "\r") {
-            if (char === "\r" && text[i + 1] === "\n") i++;
-            row.push(cell);
-            if (row.some((value) => value.trim())) rows.push(row);
-            row = [];
-            cell = "";
-          } else {
-            cell += char;
-          }
+      function requestSheetData(value) {
+        let sheetUrl;
+        try {
+          sheetUrl = new URL(value);
+        } catch {
+          throw new Error("Enter a valid Google Sheets URL.");
         }
-        if (quoted) throw new Error("The shared CSV has an unfinished quoted field.");
-        row.push(cell);
-        if (row.some((value) => value.trim())) rows.push(row);
-        return rows;
+        const match = sheetUrl.hostname === "docs.google.com"
+          ? sheetUrl.pathname.match(/^\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/)
+          : null;
+        if (!match) throw new Error("Use a Google Sheets link from docs.google.com.");
+
+        const callbackName = `__mccSheetCallback_${Date.now()}_${++nextId}`;
+        const script = document.createElement("script");
+        const endpoint = new URL(`https://docs.google.com/spreadsheets/d/${match[1]}/gviz/tq`);
+        endpoint.searchParams.set("tqx", `out:json;responseHandler:${callbackName}`);
+        const gid = sheetUrl.searchParams.get("gid");
+        if (gid) endpoint.searchParams.set("gid", gid);
+
+        return new Promise((resolve, reject) => {
+          let settled = false;
+          const cleanup = () => {
+            window.clearTimeout(timeout);
+            script.remove();
+            delete window[callbackName];
+          };
+          const finish = (error, data) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            if (error) reject(error);
+            else resolve(data);
+          };
+          const timeout = window.setTimeout(() => {
+            finish(new Error("Google Sheets did not respond. Check that the Sheet is shared with viewers and try again."));
+          }, 15000);
+          window[callbackName] = (response) => {
+            if (!response || response.status !== "ok" || !response.table) {
+              const detail = response && response.errors && response.errors[0] && response.errors[0].detailed_message;
+              finish(new Error(detail || "Google Sheets could not read this Sheet. Check its sharing permissions."));
+              return;
+            }
+            finish(null, response.table);
+          };
+          script.onerror = () => finish(new Error("Could not load the Sheet. Check the link and sharing permissions."));
+          script.src = endpoint.href;
+          document.head.append(script);
+        });
       }
 
       async function refreshSheetClips() {
@@ -506,29 +525,25 @@
           renderClips();
           return;
         }
-        let response;
-        try {
-          response = await fetch(sheetCsvUrl, { cache: "no-store" });
-        } catch (error) {
-          throw new Error(`Could not reach the published CSV. Check that the Sheet is published and its link is public. ${error.message}`);
-        }
-        if (!response.ok) throw new Error(`The published CSV returned HTTP ${response.status}.`);
-        const rows = parseCsv((await response.text()).replace(/^\uFEFF/, ""));
-        if (!rows.length) throw new Error("The published CSV is empty.");
-        const headers = rows[0].map((value) => value.trim().toLowerCase());
+        const table = await requestSheetData(sheetCsvUrl);
+        const rows = table.rows || [];
+        if (!rows.length) throw new Error("The Sheet is empty.");
+        const cellValue = (cell) => cell && cell.v != null ? String(cell.v) : "";
+        const headers = (rows[0].c || []).map((cell) => cellValue(cell).trim().toLowerCase());
         const categoryIndex = headers.indexOf("category");
         const nameIndex = headers.indexOf("name");
         const urlIndex = headers.indexOf("url") >= 0 ? headers.indexOf("url") : headers.indexOf("youtube_url");
         if (categoryIndex < 0 || nameIndex < 0 || urlIndex < 0) {
-          throw new Error("CSV must include category, name, and url columns.");
+          throw new Error("The Sheet must have columns named category, name, and url.");
         }
 
         let skipped = 0;
         const loaded = [];
-        rows.slice(1).forEach((values) => {
-          const categoryName = (values[categoryIndex] || "").trim();
-          const name = (values[nameIndex] || "").trim();
-          const urlValue = (values[urlIndex] || "").trim();
+        rows.slice(1).forEach((row) => {
+          const values = row.c || [];
+          const categoryName = cellValue(values[categoryIndex]).trim();
+          const name = cellValue(values[nameIndex]).trim();
+          const urlValue = cellValue(values[urlIndex]).trim();
           const category = categories.find((item) => item.name.toLocaleLowerCase() === categoryName.toLocaleLowerCase());
           if (!category || !name || !urlValue) {
             skipped++;
@@ -561,9 +576,14 @@
         if (value) {
           try {
             const url = new URL(value);
-            if (url.protocol !== "https:") throw new Error("Use an HTTPS published CSV URL.");
+            if (url.protocol !== "https:") throw new Error("Use an HTTPS Google Sheets URL.");
+            if (url.hostname !== "docs.google.com" || !/^\/spreadsheets\/d\/[a-zA-Z0-9_-]+/.test(url.pathname)) {
+              throw new Error("Use a Google Sheets link from docs.google.com.");
+            }
           } catch (error) {
-            setStatus(error.message || "Enter a valid published CSV URL.", true);
+            const message = error.message || "Enter a valid Google Sheets URL.";
+            sheetStatus.textContent = message;
+            setStatus(message, true);
             return;
           }
         }
@@ -571,11 +591,17 @@
           await requestResult(store("settings", "readwrite").put({ key: "sheetCsvUrl", value }));
           sheetCsvUrl = value;
           const result = await refreshSheetClips();
-          setStatus(value
-            ? `Loaded ${result.loaded} shared link${result.loaded === 1 ? "" : "s"}${result.skipped ? `; skipped ${result.skipped} invalid row${result.skipped === 1 ? "" : "s"}` : ""}.`
-            : "Shared Sheet disconnected.", true);
+          const message = !value
+            ? "Shared Sheet disconnected."
+            : result.loaded === 0 && result.skipped === 0
+              ? "Connected, but the Sheet has no links yet. Add a data row below the column headers, then refresh."
+              : `Loaded ${result.loaded} shared link${result.loaded === 1 ? "" : "s"}${result.skipped ? `; skipped ${result.skipped} invalid row${result.skipped === 1 ? "" : "s"}` : ""}.`;
+          sheetStatus.textContent = message;
+          setStatus(message, true);
         } catch (error) {
-          setStatus(`Could not load shared links: ${error.message}`, true);
+          const message = `Could not load shared links: ${error.message}`;
+          sheetStatus.textContent = message;
+          setStatus(message, true);
         }
       }
 
@@ -820,7 +846,7 @@
         if (sheetCsvUrl) {
           try {
             const result = await refreshSheetClips();
-            if (result.skipped) setStatus(`Loaded ${result.loaded} shared links; skipped ${result.skipped} invalid CSV row${result.skipped === 1 ? "" : "s"}.`);
+            if (result.skipped) setStatus(`Loaded ${result.loaded} shared links; skipped ${result.skipped} invalid Sheet row${result.skipped === 1 ? "" : "s"}.`);
           } catch (error) {
             setStatus(`Could not load shared links: ${error.message}`);
           }
