@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101411">
+  <title>Marathi Cricket Commentary</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101411;
+      --panel: #191f1b;
+      --panel-2: #202822;
+      --line: #303a32;
+      --text: #f4f2e9;
+      --muted: #9ba69b;
+      --lime: #c7f36b;
+      --orange: #ff865d;
+      --radius: 22px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(ellipse at 90% 0%, #263323 0, transparent 34rem),
+        var(--bg);
+      color: var(--text);
+    }
+    button, input, select { font: inherit; }
+    button { color: inherit; }
+    .app { width: min(100% - 32px, 760px); margin: 0 auto; padding: 28px 0 40px; }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+    .brand { display: flex; align-items: center; gap: 13px; }
+    .brand-mark {
+      width: 47px; height: 47px; display: grid; place-items: center;
+      border: 1px solid #414d3d; border-radius: 16px; background: #252e22; font-size: 24px;
+    }
+    h1 { margin: 0; font-size: clamp(19px, 5vw, 24px); letter-spacing: -.045em; line-height: 1.05; }
+    .brand p { margin: 5px 0 0; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+    .live-pill { border: 1px solid #38433a; border-radius: 999px; padding: 8px 11px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+    .live-pill::before { content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 7px 1px 0; border-radius: 50%; background: var(--lime); box-shadow: 0 0 12px #c7f36b80; }
+    .eyebrow { margin: 0 0 8px; color: var(--lime); font-size: 11px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
+    .intro { margin-bottom: 22px; }
+    .intro h2 { margin: 0; font-size: clamp(27px, 7vw, 38px); letter-spacing: -.055em; line-height: 1.08; }
+    .intro p:last-child { max-width: 480px; margin: 10px 0 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+    .category-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+    .category-button {
+      position: relative; min-height: 108px; padding: 15px; overflow: hidden;
+      display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between;
+      border: 1px solid var(--line); border-radius: var(--radius); background: linear-gradient(145deg, #202822, #181e1a);
+      cursor: pointer; text-align: left; transition: transform .15s ease, border-color .15s ease, background .15s ease;
+    }
+    .category-button:hover { border-color: #697755; transform: translateY(-2px); }
+    .category-button:active { transform: scale(.98); }
+    .category-button:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
+    .category-button .emoji { font-size: 27px; }
+    .category-button .category-name { font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .category-button .count { position: absolute; top: 16px; right: 16px; color: #829080; font-size: 11px; font-weight: 700; }
+    .category-button.no-clips { opacity: .7; }
+    .now-playing {
+      min-height: 68px; margin: 16px 0 0; padding: 13px 15px; display: flex; align-items: center; gap: 12px;
+      border: 1px solid #333e34; border-radius: 17px; background: #171d19;
+    }
+    .sound-icon { width: 37px; height: 37px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 12px; background: #283222; color: var(--lime); }
+    .now-copy { min-width: 0; flex: 1; }
+    .now-copy strong { display: block; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+    .now-copy span { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+    .icon-button { width: 37px; height: 37px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 12px; background: transparent; cursor: pointer; }
+    .icon-button:hover { background: #283129; }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 19px; }
+    .action-button { min-height: 52px; padding: 0 14px; border: 1px solid var(--line); border-radius: 15px; background: #1a211c; font-size: 13px; font-weight: 750; cursor: pointer; }
+    .action-button:hover { background: #242d25; }
+    .action-button.primary { border-color: #c7f36b55; background: var(--lime); color: #17200e; }
+    .action-button.primary:hover { background: #d4f98a; }
+    .toast { min-height: 24px; margin: 12px 2px 0; color: var(--muted); font-size: 12px; }
+    .manager { display: none; }
+    .manager.active { display: block; }
+    .home.hidden { display: none; }
+    .manager-head { display: flex; align-items: flex-start; gap: 14px; margin: 4px 0 24px; }
+    .manager-head .back { flex: 0 0 auto; }
+    .manager-head h2 { margin: 0; font-size: 30px; letter-spacing: -.05em; }
+    .manager-head p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+    .panel { margin-bottom: 15px; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
+    .panel h3 { margin: 0 0 14px; font-size: 15px; letter-spacing: -.02em; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .field { min-width: 0; }
+    .field.full { grid-column: 1 / -1; }
+    label { display: block; margin-bottom: 7px; color: #b3bdb3; font-size: 11px; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; }
+    input[type="text"], select, .category-row input {
+      width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid #39433b; border-radius: 12px; background: #111612; color: var(--text);
+    }
+    input[type="file"] { width: 100%; color: var(--muted); font-size: 12px; }
+    input[type="file"]::file-selector-button { margin-right: 10px; padding: 10px 12px; border: 1px solid #3c473e; border-radius: 10px; background: var(--panel-2); color: var(--text); cursor: pointer; }
+    .form-note { margin: 10px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .panel .action-button { width: 100%; margin-top: 14px; }
+    .clip-list { display: grid; gap: 10px; }
+    .clip-card { padding: 13px; border: 1px solid #303a32; border-radius: 15px; background: #141a16; }
+    .clip-top { display: flex; align-items: center; gap: 9px; }
+    .clip-top .clip-emoji { font-size: 20px; }
+    .clip-title { min-width: 0; flex: 1; }
+    .clip-title strong { display: block; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+    .clip-title span { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+    .clip-edit { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .clip-edit .action-button { min-height: 39px; margin: 0; font-size: 11px; }
+    .clip-edit .delete { color: #ff9a83; }
+    .category-list { display: grid; gap: 8px; }
+    .category-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+    .category-row .action-button { width: auto; min-height: 42px; margin: 0; padding: 0 12px; }
+    .empty { padding: 18px; border: 1px dashed #3b463c; border-radius: 14px; color: var(--muted); font-size: 13px; text-align: center; line-height: 1.5; }
+    .empty strong { display: block; margin-bottom: 4px; color: var(--text); }
+    footer { margin: 20px 0 0; color: #758074; font-size: 11px; line-height: 1.5; text-align: center; }
+    @media (min-width: 620px) {
+      .app { padding-top: 40px; }
+      .category-grid { gap: 14px; }
+      .category-button { min-height: 126px; padding: 19px; }
+      .category-button .emoji { font-size: 31px; }
+      .category-button .category-name { font-size: 14px; }
+      .panel { padding: 22px; }
+    }
+    @media (max-width: 390px) {
+      .app { width: min(100% - 24px, 760px); padding-top: 20px; }
+      .category-grid { gap: 8px; }
+      .category-button { min-height: 98px; padding: 12px; border-radius: 18px; }
+      .category-button .count { top: 13px; right: 12px; }
+      .actions { gap: 8px; }
+      .action-button { padding: 0 8px; font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="home" id="homeView">
+      <header>
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">🏏</div>
+          <div>
+            <h1>Marathi Cricket</h1>
+            <p>Commentary box</p>
+          </div>
+        </div>
+        <div class="live-pill">MATCH MODE</div>
+      </header>
+
+      <div class="intro">
+        <p class="eyebrow">Your voice. Your moment.</p>
+        <h2>Make every ball<br>sound legendary.</h2>
+        <p>Tap a moment to play a random Marathi reaction. Clips cycle so you won't hear the same one twice in a row.</p>
+      </div>
+
+      <div class="category-grid" id="categoryGrid" aria-label="Commentary categories"></div>
+
+      <div class="now-playing" aria-live="polite">
+        <div class="sound-icon" aria-hidden="true">♫</div>
+        <div class="now-copy">
+          <strong id="playingName">Ready for the next moment</strong>
+          <span id="playingCategory">Add your audio clips to get started</span>
+        </div>
+        <button class="icon-button" id="stopButton" type="button" aria-label="Stop audio" title="Stop audio">■</button>
+      </div>
+
+      <div class="actions">
+        <button class="action-button primary" id="manageButton" type="button">⚙ &nbsp; Manage audio</button>
+        <button class="action-button" id="resetButton" type="button">↻ &nbsp; Reset history</button>
+      </div>
+      <p class="toast" id="homeStatus" role="status"></p>
+      <footer>Your audio stays on this device. No account or internet connection needed after the page is saved.</footer>
+    </section>
+
+    <section class="manager" id="managerView">
+      <div class="manager-head">
+        <button class="icon-button back" id="backButton" type="button" aria-label="Back to match mode">←</button>
+        <div>
+          <p class="eyebrow">Your soundboard</p>
+          <h2>Manage audio</h2>
+          <p>Add audio clips or YouTube links, organize categories, and preview your reactions.</p>
+        </div>
+      </div>
+
+      <form class="panel" id="addForm">
+        <h3>＋ Add a new clip</h3>
+        <div class="form-grid">
+          <div class="field full">
+            <label for="clipType">Clip type</label>
+            <select id="clipType">
+              <option value="audio">Audio file</option>
+              <option value="youtube">YouTube link</option>
+            </select>
+          </div>
+          <div class="field full">
+            <label for="audioFile">Audio file</label>
+            <input id="audioFile" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav">
+          </div>
+          <div class="field full" id="youtubeField" hidden>
+            <label for="youtubeUrl">YouTube video link</label>
+            <input id="youtubeUrl" type="url" inputmode="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="url">
+          </div>
+          <div class="field">
+            <label for="clipName">Clip name</label>
+            <input id="clipName" type="text" maxlength="80" placeholder="e.g. काय शॉट आहे!" required>
+          </div>
+          <div class="field">
+            <label for="clipCategory">Category</label>
+            <select id="clipCategory" required></select>
+          </div>
+        </div>
+        <p class="form-note" id="addFormNote">MP3 recommended. Audio is stored in this browser on this device; clearing browser data may remove it.</p>
+        <button class="action-button primary" id="saveClipButton" type="submit">Save audio clip</button>
+      </form>
+
+      <section class="panel">
+        <h3>Your clips <span id="clipCount" style="color:var(--muted);font-weight:500"></span></h3>
+        <div class="clip-list" id="clipList"></div>
+      </section>
+
+      <section class="panel">
+        <h3>Categories</h3>
+        <form id="categoryForm" class="category-row" style="margin-bottom:12px">
+          <input id="newCategoryName" type="text" maxlength="32" placeholder="New category name" aria-label="New category name" required>
+          <button class="action-button primary" type="submit">＋ Add</button>
+        </form>
+        <div class="category-list" id="categoryList"></div>
+        <p class="form-note">Deleting a category moves its clips to Other (or the first remaining category).</p>
+      </section>
+      <p class="toast" id="managerStatus" role="status"></p>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const defaults = [
+        { id: "batting", name: "Batting", emoji: "🏏" },
+        { id: "bowling", name: "Bowling", emoji: "🎯" },
+        { id: "catch", name: "Catch", emoji: "🧤" },
+        { id: "wicket", name: "Wicket", emoji: "🔥" },
+        { id: "comedy", name: "Comedy", emoji: "😂" },
+        { id: "celebration", name: "Celebration", emoji: "🎉" },
+        { id: "drop", name: "Drop / Miss", emoji: "😱" },
+        { id: "other", name: "Other", emoji: "📣" }
+      ];
+      const dbName = "marathi-cricket-commentary";
+      let db;
+      let categories = [];
+      let clips = [];
+      let activeAudio = null;
+      let activeUrl = null;
+      let history = {};
+      let nextId = 0;
+
+      const $ = (selector) => document.querySelector(selector);
+      const homeStatus = $("#homeStatus");
+      const managerStatus = $("#managerStatus");
+
+      function setStatus(message, manager = false) {
+        (manager ? managerStatus : homeStatus).textContent = message;
+      }
+
+      function openDatabase() {
+        return new Promise((resolve, reject) => {
+          const request = indexedDB.open(dbName, 1);
+          request.onupgradeneeded = () => {
+            const database = request.result;
+            database.createObjectStore("clips", { keyPath: "id" });
+            database.createObjectStore("categories", { keyPath: "id" });
+            database.createObjectStore("settings", { keyPath: "key" });
+          };
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error || new Error("Could not open local audio storage."));
+        });
+      }
+
+      function requestResult(request) {
+        return new Promise((resolve, reject) => {
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error || new Error("Local storage request failed."));
+        });
+      }
+
+      function store(name, mode = "readonly") {
+        return db.transaction(name, mode).objectStore(name);
+      }
+
+      async function refreshData() {
+        const tx = db.transaction(["categories", "clips", "settings"], "readonly");
+        const categoryRequest = tx.objectStore("categories").getAll();
+        const clipRequest = tx.objectStore("clips").getAll();
+        const historyRequest = tx.objectStore("settings").get("history");
+        const [savedCategories, savedClips, savedHistory] = await Promise.all([
+          requestResult(categoryRequest), requestResult(clipRequest), requestResult(historyRequest)
+        ]);
+        if (savedCategories.length === 0) {
+          const write = db.transaction("categories", "readwrite").objectStore("categories");
+          defaults.forEach((category) => write.put(category));
+          categories = defaults.slice();
+        } else {
+          categories = savedCategories;
+        }
+        clips = savedClips;
+        history = savedHistory ? savedHistory.value : {};
+        render();
+      }
+
+      function render() {
+        const grid = $("#categoryGrid");
+        grid.replaceChildren();
+        categories.forEach((category) => {
+          const count = clips.filter((clip) => clip.categoryId === category.id).length;
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "category-button" + (count ? "" : " no-clips");
+          button.setAttribute("aria-label", `${category.name}, ${count} audio clips`);
+          button.innerHTML = `<span class="emoji" aria-hidden="true">${escapeHtml(category.emoji)}</span><span class="category-name"></span><span class="count">${count} ${count === 1 ? "CLIP" : "CLIPS"}</span>`;
+          button.querySelector(".category-name").textContent = category.name;
+          button.addEventListener("click", () => playRandom(category.id));
+          grid.append(button);
+        });
+
+        const select = $("#clipCategory");
+        const selected = select.value;
+        select.replaceChildren();
+        categories.forEach((category) => {
+          const option = document.createElement("option");
+          option.value = category.id;
+          option.textContent = `${category.emoji} ${category.name}`;
+          select.append(option);
+        });
+        if (categories.some((category) => category.id === selected)) select.value = selected;
+
+        renderClips();
+        renderCategories();
+      }
+
+      function renderClips() {
+        const list = $("#clipList");
+        list.replaceChildren();
+        $("#clipCount").textContent = `(${clips.length})`;
+        if (!clips.length) {
+          list.innerHTML = '<div class="empty"><strong>No audio clips yet</strong>Add your first reaction above to start your soundboard.</div>';
+          return;
+        }
+        clips.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach((clip) => {
+          const category = categories.find((item) => item.id === clip.categoryId);
+          const card = document.createElement("article");
+          card.className = "clip-card";
+          card.innerHTML = `
+            <div class="clip-top">
+              <span class="clip-emoji" aria-hidden="true">${escapeHtml(category ? category.emoji : "🎵")}</span>
+              <div class="clip-title"><strong></strong><span></span></div>
+              <button class="icon-button preview" type="button" aria-label="Preview clip" title="Preview">▶</button>
+            </div>
+            <div class="clip-edit">
+              <input type="text" maxlength="80" aria-label="Clip name">
+              <select aria-label="Clip category"></select>
+              <button class="action-button save" type="button">Save changes</button>
+              <button class="action-button delete" type="button">Delete clip</button>
+            </div>`;
+          card.querySelector(".clip-title strong").textContent = clip.name;
+          card.querySelector(".clip-title span").textContent = clip.youtubeUrl
+            ? `${category ? category.name : "Uncategorized"} · YouTube link`
+            : `${category ? category.name : "Uncategorized"} · ${formatSize(clip.file.size)}`;
+          if (clip.youtubeUrl) {
+            card.querySelector(".preview").textContent = "↗";
+            card.querySelector(".preview").setAttribute("aria-label", "Open YouTube link");
+            card.querySelector(".preview").title = "Open YouTube link";
+          }
+          const nameInput = card.querySelector("input");
+          nameInput.value = clip.name;
+          const categorySelect = card.querySelector("select");
+          categories.forEach((item) => {
+            const option = document.createElement("option");
+            option.value = item.id;
+            option.textContent = `${item.emoji} ${item.name}`;
+            categorySelect.append(option);
+          });
+          categorySelect.value = clip.categoryId;
+          card.querySelector(".preview").addEventListener("click", () => {
+            try {
+              playClip(clip, category, true).catch((error) => {
+                setStatus(`Could not play this clip: ${error.message}`, true);
+              });
+              setStatus(clip.youtubeUrl ? "YouTube link opened in a new tab." : "Previewing audio clip.", true);
+            } catch (error) {
+              setStatus(`Could not open this clip: ${error.message}`, true);
+            }
+          });
+          card.querySelector(".save").addEventListener("click", () => updateClip(clip.id, nameInput.value, categorySelect.value));
+          card.querySelector(".delete").addEventListener("click", () => deleteClip(clip.id));
+          list.append(card);
+        });
+      }
+
+      function renderCategories() {
+        const list = $("#categoryList");
+        list.replaceChildren();
+        categories.forEach((category) => {
+          const row = document.createElement("div");
+          row.className = "category-row";
+          row.innerHTML = `<input type="text" maxlength="32" aria-label="Category name"><button class="action-button delete" type="button">Delete</button>`;
+          row.querySelector("input").value = `${category.emoji} ${category.name}`;
+          row.querySelector("input").addEventListener("change", (event) => renameCategory(category, event.target.value));
+          row.querySelector("button").addEventListener("click", () => deleteCategory(category));
+          list.append(row);
+        });
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, (char) => ({
+          "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+        })[char]);
+      }
+
+      function formatSize(bytes) {
+        return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+      }
+
+      function validateYouTubeUrl(value) {
+        let url;
+        try {
+          url = new URL(value);
+        } catch {
+          throw new Error("Enter a valid YouTube video link.");
+        }
+        const host = url.hostname.toLowerCase();
+        const validHost = ["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be", "www.youtu.be"].includes(host);
+        const hasVideoPath = host.endsWith("youtu.be")
+          ? url.pathname.length > 1
+          : url.pathname === "/watch"
+            ? Boolean(url.searchParams.get("v"))
+            : /^\/(shorts|embed|live)\/[^/]+/.test(url.pathname);
+        if (url.protocol !== "https:" || !validHost || !hasVideoPath) {
+          throw new Error("Use a valid YouTube video URL, such as youtube.com/watch?v=... or youtu.be/...");
+        }
+        return url.href;
+      }
+
+      function updateClipType() {
+        const youtube = $("#clipType").value === "youtube";
+        $("#audioFile").required = !youtube;
+        $("#audioFile").disabled = youtube;
+        $("#youtubeField").hidden = !youtube;
+        $("#youtubeUrl").required = youtube;
+        $("#youtubeUrl").disabled = !youtube;
+        $("#audioFile").parentElement.hidden = youtube;
+        $("#saveClipButton").textContent = youtube ? "Save YouTube link" : "Save audio clip";
+        $("#addFormNote").textContent = youtube
+          ? "When this clip is picked, its YouTube video opens in a new tab. The soundboard stays open."
+          : "MP3 recommended. Audio is stored in this browser on this device; clearing browser data may remove it.";
+      }
+
+      function createId() {
+        return `clip-${Date.now()}-${++nextId}`;
+      }
+
+      async function addClip(event) {
+        event.preventDefault();
+        const type = $("#clipType").value;
+        const file = $("#audioFile").files[0];
+        const youtubeInput = $("#youtubeUrl").value.trim();
+        const name = $("#clipName").value.trim();
+        const categoryId = $("#clipCategory").value;
+        if (!name || !categoryId) return setStatus("Enter a clip name and choose a category.", true);
+        if (type === "audio" && !file) return setStatus("Choose an audio file.", true);
+        if (type === "audio" && !file.type.startsWith("audio/") && !/\.(mp3|m4a|aac|wav|ogg)$/i.test(file.name)) {
+          return setStatus("That file does not appear to be a supported audio format.", true);
+        }
+        let youtubeUrl;
+        if (type === "youtube") {
+          try {
+            youtubeUrl = validateYouTubeUrl(youtubeInput);
+          } catch (error) {
+            return setStatus(error.message, true);
+          }
+        }
+        try {
+          const clip = { id: createId(), name, categoryId, addedAt: Date.now() };
+          if (type === "youtube") clip.youtubeUrl = youtubeUrl;
+          else clip.file = file;
+          await requestResult(store("clips", "readwrite").add(clip));
+          $("#addForm").reset();
+          updateClipType();
+          await refreshData();
+          setStatus(type === "youtube" ? "YouTube link saved on this device." : "Audio clip saved on this device.", true);
+        } catch (error) {
+          setStatus(`Could not save this clip: ${error.message}`, true);
+        }
+      }
+
+      async function updateClip(id, name, categoryId) {
+        const cleanName = name.trim();
+        if (!cleanName || !categories.some((category) => category.id === categoryId)) {
+          return setStatus("Enter a clip name and choose a valid category.", true);
+        }
+        try {
+          const clip = clips.find((item) => item.id === id);
+          if (!clip) throw new Error("This clip is no longer available.");
+          await requestResult(store("clips", "readwrite").put({ ...clip, name: cleanName, categoryId }));
+          await refreshData();
+          setStatus("Clip changes saved.", true);
+        } catch (error) {
+          setStatus(`Could not update this clip: ${error.message}`, true);
+        }
+      }
+
+      async function deleteClip(id) {
+        if (!window.confirm("Delete this audio clip from this device?")) return;
+        try {
+          await requestResult(store("clips", "readwrite").delete(id));
+          Object.keys(history).forEach((categoryId) => {
+            history[categoryId] = (history[categoryId] || []).filter((clipId) => clipId !== id);
+          });
+          await saveHistory();
+          await refreshData();
+          setStatus("Clip deleted.", true);
+        } catch (error) {
+          setStatus(`Could not delete this clip: ${error.message}`, true);
+        }
+      }
+
+      async function renameCategory(category, value) {
+        const trimmed = value.trim();
+        const name = trimmed.replace(/^[^\p{L}\p{N}]+/u, "").trim();
+        const emoji = trimmed.match(/^[^\p{L}\p{N}]+/u);
+        if (!name) {
+          setStatus("Category name cannot be empty.", true);
+          renderCategories();
+          return;
+        }
+        try {
+          await requestResult(store("categories", "readwrite").put({ ...category, name, emoji: emoji ? emoji[0].trim() : category.emoji }));
+          await refreshData();
+          setStatus("Category updated.", true);
+        } catch (error) {
+          setStatus(`Could not update category: ${error.message}`, true);
+        }
+      }
+
+      async function addCategory(event) {
+        event.preventDefault();
+        const name = $("#newCategoryName").value.trim();
+        if (!name) return;
+        const id = `category-${Date.now()}-${++nextId}`;
+        try {
+          await requestResult(store("categories", "readwrite").add({ id, name, emoji: "🎙️" }));
+          $("#categoryForm").reset();
+          await refreshData();
+          $("#clipCategory").value = id;
+          setStatus("Category added.", true);
+        } catch (error) {
+          setStatus(`Could not add category: ${error.message}`, true);
+        }
+      }
+
+      async function deleteCategory(category) {
+        if (categories.length <= 1) return setStatus("Keep at least one category.", true);
+        if (!window.confirm(`Delete "${category.name}"? Its clips will move to another category.`)) return;
+        const remaining = categories.filter((item) => item.id !== category.id);
+        const destination = remaining.find((item) => item.id === "other") || remaining[0];
+        try {
+          const tx = db.transaction(["categories", "clips"], "readwrite");
+          tx.objectStore("categories").delete(category.id);
+          clips.filter((clip) => clip.categoryId === category.id).forEach((clip) => {
+            tx.objectStore("clips").put({ ...clip, categoryId: destination.id });
+          });
+          await new Promise((resolve, reject) => {
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error || new Error("Could not update categories."));
+            tx.onabort = () => reject(tx.error || new Error("Category update was cancelled."));
+          });
+          delete history[category.id];
+          await saveHistory();
+          await refreshData();
+          setStatus(`Category deleted. Clips moved to ${destination.name}.`, true);
+        } catch (error) {
+          setStatus(`Could not delete category: ${error.message}`, true);
+        }
+      }
+
+      async function saveHistory() {
+        await requestResult(store("settings", "readwrite").put({ key: "history", value: history }));
+      }
+
+      async function playRandom(categoryId) {
+        const available = clips.filter((clip) => clip.categoryId === categoryId);
+        const category = categories.find((item) => item.id === categoryId);
+        if (!available.length) {
+          setStatus(`No clips in ${category ? category.name : "this category"} yet. Add one in Manage audio.`);
+          return;
+        }
+        const alreadyPlayed = new Set(history[categoryId] || []);
+        let candidates = available.filter((clip) => !alreadyPlayed.has(clip.id));
+        if (!candidates.length) {
+          history[categoryId] = [];
+          candidates = available;
+        }
+        const selected = candidates[Math.floor(Math.random() * candidates.length)];
+        try {
+          await playClip(selected, category, false);
+          const current = new Set(history[categoryId] || []);
+          current.add(selected.id);
+          history[categoryId] = Array.from(current);
+          await saveHistory();
+          setStatus("");
+        } catch (error) {
+          setStatus(`Could not play audio: ${error.message}`);
+        }
+      }
+
+      function playClip(clip, category, preview) {
+        stopAudio();
+        $("#playingName").textContent = clip.name;
+        if (clip.youtubeUrl) {
+          $("#playingCategory").textContent = `${category ? category.name : "YouTube"} · YouTube${preview ? " preview" : ""} · Opens in new tab`;
+          window.open(clip.youtubeUrl, "_blank", "noopener,noreferrer");
+          return Promise.resolve();
+        }
+        if (!clip.file) throw new Error("This clip has no audio file or YouTube link.");
+        $("#playingCategory").textContent = `${category ? category.name : "Audio"}${preview ? " · Preview" : ""}`;
+        activeUrl = URL.createObjectURL(clip.file);
+        activeAudio = new Audio(activeUrl);
+        try {
+          const playback = activeAudio.play();
+          activeAudio.addEventListener("ended", stopAudio, { once: true });
+          return playback;
+        } catch (error) {
+          stopAudio();
+          throw error;
+        }
+      }
+
+      function stopAudio() {
+        if (activeAudio) {
+          activeAudio.pause();
+          activeAudio.src = "";
+          activeAudio = null;
+        }
+        if (activeUrl) {
+          URL.revokeObjectURL(activeUrl);
+          activeUrl = null;
+        }
+      }
+
+      function resetHistory() {
+        history = {};
+        saveHistory().then(() => setStatus("Play history cleared. Fresh random cycles start now."))
+          .catch((error) => setStatus(`Could not reset history: ${error.message}`));
+      }
+
+      function showManager(show) {
+        $("#homeView").classList.toggle("hidden", show);
+        $("#managerView").classList.toggle("active", show);
+        if (show) setStatus("");
+      }
+
+      $("#manageButton").addEventListener("click", () => showManager(true));
+      $("#backButton").addEventListener("click", () => showManager(false));
+      $("#addForm").addEventListener("submit", addClip);
+      $("#clipType").addEventListener("change", updateClipType);
+      $("#categoryForm").addEventListener("submit", addCategory);
+      $("#resetButton").addEventListener("click", resetHistory);
+      $("#stopButton").addEventListener("click", stopAudio);
+
+      openDatabase().then(async (database) => {
+        db = database;
+        updateClipType();
+        await refreshData();
+      }).catch((error) => {
+        setStatus(`Local audio storage is unavailable: ${error.message}`);
+        $("#manageButton").disabled = true;
+      });
+    })();
+  </script>
+</body>
+</html>
